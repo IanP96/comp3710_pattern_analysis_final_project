@@ -48,6 +48,7 @@ Note: Use original data as training set to generater synthetic data (time-series
 
 import os
 import logging
+import random
 
 import torch
 import torch.nn as nn
@@ -234,21 +235,8 @@ class Discriminator(nn.Module):
         return Y_hat
 
 
-class BaseModel:
-    """Base Model for timegan"""
-
-    def __init__(self, opt, ori_data):
-        # Seed for deterministic behavior
-        self.seed(opt.manualseed)
-
-        # Initalize variables.
-        self.opt = opt
-        self.ori_data, self.min_val, self.max_val = NormMinMax(ori_data)
-        self.ori_time, self.max_seq_len = extract_time(self.ori_data)
-        self.data_num, _, _ = np.asarray(ori_data).shape  # 3661; 24; 6
-        self.trn_dir = os.path.join(self.opt.outf, self.opt.name, "train")
-        self.tst_dir = os.path.join(self.opt.outf, self.opt.name, "test")
-        self.device = TORCH_DEVICE
+class TimeGAN:
+    """TimeGAN Class"""
 
     def seed(self, seed_value: int) -> None:
         """
@@ -263,239 +251,29 @@ class BaseModel:
             return
 
         # Otherwise seed all functionality
-        import random
-
         random.seed(seed_value)
         torch.manual_seed(seed_value)
         torch.cuda.manual_seed_all(seed_value)
         np.random.seed(seed_value)
         torch.backends.cudnn.deterministic = True
 
-    def save_weights(self, epoch):
-        """Save net weights for the current epoch.
-
-        Args:
-            epoch ([int]): Current epoch number.
-        """
-
-        weight_dir = os.path.join(self.opt.outf, self.opt.name, "train", "weights")
-        if not os.path.exists(weight_dir):
-            os.makedirs(weight_dir)
-
-        torch.save(
-            {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
-            "%s/netE.pth" % (weight_dir),
-        )
-        torch.save(
-            {"epoch": epoch + 1, "state_dict": self.netr.state_dict()},
-            "%s/netR.pth" % (weight_dir),
-        )
-        torch.save(
-            {"epoch": epoch + 1, "state_dict": self.netg.state_dict()},
-            "%s/netG.pth" % (weight_dir),
-        )
-        torch.save(
-            {"epoch": epoch + 1, "state_dict": self.netd.state_dict()},
-            "%s/netD.pth" % (weight_dir),
-        )
-        torch.save(
-            {"epoch": epoch + 1, "state_dict": self.nets.state_dict()},
-            "%s/netS.pth" % (weight_dir),
-        )
-
-    def train_one_iter_er(self):
-        """Train the model for one epoch."""
-
-        self.nete.train()
-        self.netr.train()
-
-        # set mini-batch
-        self.X0, self.T = batch_generator(
-            self.ori_data, self.ori_time, self.opt.batch_size
-        )
-        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-
-        # train encoder & decoder
-        self.optimize_params_er()
-
-    def train_one_iter_er_(self):
-        """Train the model for one epoch."""
-
-        self.nete.train()
-        self.netr.train()
-
-        # set mini-batch
-        self.X0, self.T = batch_generator(
-            self.ori_data, self.ori_time, self.opt.batch_size
-        )
-        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-
-        # train encoder & decoder
-        self.optimize_params_er_()
-
-    def train_one_iter_s(self):
-        """Train the model for one epoch."""
-
-        # self.nete.eval()
-        self.nets.train()
-
-        # set mini-batch
-        self.X0, self.T = batch_generator(
-            self.ori_data, self.ori_time, self.opt.batch_size
-        )
-        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-
-        # train superviser
-        self.optimize_params_s()
-
-    def train_one_iter_g(self):
-        """Train the model for one epoch."""
-
-        # self.netr.eval()
-        # self.nets.eval()
-        # self.netd.eval()
-
-        self.netg.train()
-
-        # set mini-batch
-        self.X0, self.T = batch_generator(
-            self.ori_data, self.ori_time, self.opt.batch_size
-        )
-        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-        self.Z = random_generator(
-            self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
-        )
-
-        # train superviser
-        self.optimize_params_g()
-
-    def train_one_iter_d(self):
-        """Train the model for one epoch."""
-
-        # self.nete.eval()
-        # self.netr.eval()
-        # self.nets.eval()
-        # self.netg.eval()
-
-        self.netd.train()
-
-        # set mini-batch
-        self.X0, self.T = batch_generator(
-            self.ori_data, self.ori_time, self.opt.batch_size
-        )
-        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-        self.Z = random_generator(
-            self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
-        )
-
-        # train superviser
-        self.optimize_params_d()
-
-    def train(self):
-        """Train the model"""
-        logger.info("Model training started...")
-
-        for iter in range(self.opt.iteration):
-            # Train for one iter
-            self.train_one_iter_er()
-
-            # print("Encoder training step: " + str(iter) + "/" + str(self.opt.iteration))
-            logger.info("Encoder training step: %s/%s", iter, self.opt.iteration)
-
-        for iter in range(self.opt.iteration):
-            # Train for one iter
-            self.train_one_iter_s()
-
-            # print(
-            #     "Superviser training step: " + str(iter) + "/" + str(self.opt.iteration)
-            # )
-            logger.debug("Superviser training step: %s/%s", iter, self.opt.iteration)
-
-        for iter in range(self.opt.iteration):
-            # Train for one iter
-            for kk in range(2):
-                self.train_one_iter_g()
-                self.train_one_iter_er_()
-
-            self.train_one_iter_d()
-
-            # print(
-            #     "Superviser training step: " + str(iter) + "/" + str(self.opt.iteration)
-            # )
-            logger.debug("Superviser training step: %s/%s", iter, self.opt.iteration)
-
-        self.save_weights(self.opt.iteration)
-        self.generated_data = self.generation(self.opt.batch_size)
-        logger.info("Finished synthetic data generation.")
-
-    # self.evaluation()
-
-    # def evaluation(self):
-    #     ## Performance metrics
-    #     # Output initialization
-    #     metric_results = dict()
-
-    #     # 1. Discriminative Score
-    #     discriminative_score = list()
-    #     for _ in range(self.opt.metric_iteration):
-    #         temp_disc = discriminative_score_metrics(self.ori_data, self.generated_data)
-    #         discriminative_score.append(temp_disc)
-
-    #     metric_results['discriminative'] = np.mean(discriminative_score)
-
-    #     # 2. Predictive score
-    #     predictive_score = list()
-    #     for tt in range(self.opt.metric_iteration):
-    #         temp_pred = predictive_score_metrics(self.ori_data, self.generated_data)
-    #         predictive_score.append(temp_pred)
-
-    #     metric_results['predictive'] = np.mean(predictive_score)
-
-    #     # 3. Visualization (PCA and tSNE)
-    #     visualization(self.ori_data, self.generated_data, 'pca')
-    #     visualization(self.ori_data, self.generated_data, 'tsne')
-
-    #     ## Print discriminative and predictive scores
-    #     print(metric_results)
-
-    def generation(self, num_samples, mean=0.0, std=1.0):
-        if num_samples == 0:
-            return None, None
-        # Synthetic data generation
-        self.X0, self.T = batch_generator(
-            self.ori_data, self.ori_time, self.opt.batch_size
-        )
-        # todo number of paramters given is most likely wrong, fix
-        self.Z = random_generator(
-            num_samples, self.opt.z_dim, self.T, self.max_seq_len, mean, std
-        )
-        self.Z = torch.tensor(self.Z, dtype=torch.float32).to(self.device)
-        self.E_hat = self.netg(self.Z)  # [?, 24, 24]
-        self.H_hat = self.nets(self.E_hat)  # [?, 24, 24]
-        generated_data_curr = (
-            self.netr(self.H_hat).cpu().detach().numpy()
-        )  # [?, 24, 24]
-
-        generated_data = list()
-        for i in range(num_samples):
-            temp = generated_data_curr[i, : self.ori_time[i], :]
-            generated_data.append(temp)
-
-        # Renormalisation
-        generated_data = generated_data * self.max_val
-        generated_data = generated_data + self.min_val
-        return generated_data
-
-
-class TimeGAN(BaseModel):
-    """TimeGAN Class"""
-
     @property
     def name(self):
         return "TimeGAN"
 
     def __init__(self, opt, ori_data):
-        super(TimeGAN, self).__init__(opt, ori_data)
+
+        # Seed for deterministic behavior
+        self.seed(opt.manualseed)
+
+        # Initalise variables
+        self.opt = opt
+        self.ori_data, self.min_val, self.max_val = NormMinMax(ori_data)
+        self.ori_time, self.max_seq_len = extract_time(self.ori_data)
+        self.data_num, _, _ = np.asarray(ori_data).shape  # 3661; 24; 6
+        self.trn_dir = os.path.join(self.opt.outf, self.opt.name, "train")
+        self.tst_dir = os.path.join(self.opt.outf, self.opt.name, "test")
+        self.device = TORCH_DEVICE
 
         # -- Misc attributes
         self.epoch = 0
@@ -728,3 +506,218 @@ class TimeGAN(BaseModel):
         self.optimizer_d.zero_grad()
         self.backward_d()
         self.optimizer_d.step()
+
+    def save_weights(self, epoch):
+        """Save net weights for the current epoch.
+
+        Args:
+            epoch ([int]): Current epoch number.
+        """
+
+        weight_dir = os.path.join(self.opt.outf, self.opt.name, "train", "weights")
+        if not os.path.exists(weight_dir):
+            os.makedirs(weight_dir)
+
+        torch.save(
+            {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
+            "%s/netE.pth" % (weight_dir),
+        )
+        torch.save(
+            {"epoch": epoch + 1, "state_dict": self.netr.state_dict()},
+            "%s/netR.pth" % (weight_dir),
+        )
+        torch.save(
+            {"epoch": epoch + 1, "state_dict": self.netg.state_dict()},
+            "%s/netG.pth" % (weight_dir),
+        )
+        torch.save(
+            {"epoch": epoch + 1, "state_dict": self.netd.state_dict()},
+            "%s/netD.pth" % (weight_dir),
+        )
+        torch.save(
+            {"epoch": epoch + 1, "state_dict": self.nets.state_dict()},
+            "%s/netS.pth" % (weight_dir),
+        )
+
+    def train_one_iter_er(self):
+        """Train the model for one epoch."""
+
+        self.nete.train()
+        self.netr.train()
+
+        # set mini-batch
+        self.X0, self.T = batch_generator(
+            self.ori_data, self.ori_time, self.opt.batch_size
+        )
+        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
+
+        # train encoder & decoder
+        self.optimize_params_er()
+
+    def train_one_iter_er_(self):
+        """Train the model for one epoch."""
+
+        self.nete.train()
+        self.netr.train()
+
+        # set mini-batch
+        self.X0, self.T = batch_generator(
+            self.ori_data, self.ori_time, self.opt.batch_size
+        )
+        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
+
+        # train encoder & decoder
+        self.optimize_params_er_()
+
+    def train_one_iter_s(self):
+        """Train the model for one epoch."""
+
+        # self.nete.eval()
+        self.nets.train()
+
+        # set mini-batch
+        self.X0, self.T = batch_generator(
+            self.ori_data, self.ori_time, self.opt.batch_size
+        )
+        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
+
+        # train superviser
+        self.optimize_params_s()
+
+    def train_one_iter_g(self):
+        """Train the model for one epoch."""
+
+        # self.netr.eval()
+        # self.nets.eval()
+        # self.netd.eval()
+
+        self.netg.train()
+
+        # set mini-batch
+        self.X0, self.T = batch_generator(
+            self.ori_data, self.ori_time, self.opt.batch_size
+        )
+        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
+        self.Z = random_generator(
+            self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
+        )
+
+        # train superviser
+        self.optimize_params_g()
+
+    def train_one_iter_d(self):
+        """Train the model for one epoch."""
+
+        # self.nete.eval()
+        # self.netr.eval()
+        # self.nets.eval()
+        # self.netg.eval()
+
+        self.netd.train()
+
+        # set mini-batch
+        self.X0, self.T = batch_generator(
+            self.ori_data, self.ori_time, self.opt.batch_size
+        )
+        self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
+        self.Z = random_generator(
+            self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
+        )
+
+        # train superviser
+        self.optimize_params_d()
+
+    def train(self):
+        """Train the model"""
+        logger.info("Model training started...")
+
+        for iter in range(self.opt.iteration):
+            # Train for one iter
+            self.train_one_iter_er()
+
+            # print("Encoder training step: " + str(iter) + "/" + str(self.opt.iteration))
+            logger.info("Encoder training step: %s/%s", iter, self.opt.iteration)
+
+        for iter in range(self.opt.iteration):
+            # Train for one iter
+            self.train_one_iter_s()
+
+            # print(
+            #     "Superviser training step: " + str(iter) + "/" + str(self.opt.iteration)
+            # )
+            logger.debug("Superviser training step: %s/%s", iter, self.opt.iteration)
+
+        for iter in range(self.opt.iteration):
+            # Train for one iter
+            for kk in range(2):
+                self.train_one_iter_g()
+                self.train_one_iter_er_()
+
+            self.train_one_iter_d()
+
+            # print(
+            #     "Superviser training step: " + str(iter) + "/" + str(self.opt.iteration)
+            # )
+            logger.debug("Superviser training step: %s/%s", iter, self.opt.iteration)
+
+        self.save_weights(self.opt.iteration)
+        self.generated_data = self.generation(self.opt.batch_size)
+        logger.info("Finished synthetic data generation.")
+
+    # self.evaluation()
+
+    # def evaluation(self):
+    #     ## Performance metrics
+    #     # Output initialization
+    #     metric_results = dict()
+
+    #     # 1. Discriminative Score
+    #     discriminative_score = list()
+    #     for _ in range(self.opt.metric_iteration):
+    #         temp_disc = discriminative_score_metrics(self.ori_data, self.generated_data)
+    #         discriminative_score.append(temp_disc)
+
+    #     metric_results['discriminative'] = np.mean(discriminative_score)
+
+    #     # 2. Predictive score
+    #     predictive_score = list()
+    #     for tt in range(self.opt.metric_iteration):
+    #         temp_pred = predictive_score_metrics(self.ori_data, self.generated_data)
+    #         predictive_score.append(temp_pred)
+
+    #     metric_results['predictive'] = np.mean(predictive_score)
+
+    #     # 3. Visualization (PCA and tSNE)
+    #     visualization(self.ori_data, self.generated_data, 'pca')
+    #     visualization(self.ori_data, self.generated_data, 'tsne')
+
+    #     ## Print discriminative and predictive scores
+    #     print(metric_results)
+
+    def generation(self, num_samples: int, mean=0.0, std=1.0):
+        if num_samples == 0:
+            return None, None
+        # Synthetic data generation
+        self.X0, self.T = batch_generator(
+            self.ori_data, self.ori_time, self.opt.batch_size
+        )
+        # todo number of paramters given is most likely wrong, fix
+        self.Z = random_generator(
+            num_samples, self.opt.z_dim, self.T, self.max_seq_len, mean, std
+        )
+        self.Z = torch.tensor(self.Z, dtype=torch.float32).to(self.device)
+        self.E_hat = self.netg(self.Z)  # [?, 24, 24]
+        self.H_hat = self.nets(self.E_hat)  # [?, 24, 24]
+        generated_data_curr: np.ndarray = (
+            self.netr(self.H_hat).cpu().detach().numpy()
+        )  # [?, 24, 24]
+
+        generated_data = list()
+        for i in range(num_samples):
+            temp = generated_data_curr[i, : self.ori_time[i], :]
+            generated_data.append(temp)
+
+        # Renormalisation
+        generated_data = generated_data * self.max_val
+        generated_data = generated_data + self.min_val
+        return generated_data

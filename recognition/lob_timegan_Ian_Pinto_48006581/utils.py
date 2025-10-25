@@ -30,6 +30,15 @@ logger.setLevel(logging.DEBUG)
 DATA_DIR = "data"
 ORDERBOOK_DATA_FILENAME = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
 
+# NUM_TRAINING_ITERATIONS = 50_000
+NUM_TRAINING_ITERATIONS = 50
+
+if NUM_TRAINING_ITERATIONS < 1_000:
+    logger.warning(
+        "Number of training iterations is set to a low value of %s for testing purposes.",
+        NUM_TRAINING_ITERATIONS,
+    )
+
 # Device configuration
 # source: https://edstem.org/au/courses/26755/discussion/2844412?answer=6302304
 TORCH_DEVICE_NAME: str
@@ -108,7 +117,7 @@ def extract_time(data):
     return time, max_seq_len
 
 
-def random_generator(batch_size, z_dim, T_mb, max_seq_len):
+def random_generator(batch_size: int, z_dim: int, T_mb, max_seq_len):
     """Random vector generation.
 
     Args:

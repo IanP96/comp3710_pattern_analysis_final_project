@@ -8,7 +8,10 @@ Returns:
 
 import argparse
 import os
+
 # import torch
+
+from utils import NUM_TRAINING_ITERATIONS
 
 
 class Options:
@@ -31,7 +34,7 @@ class Options:
         #     default="stock",
         #     type=str,
         # )
-        
+
         # self.parser.add_argument(
         #     "--z_dim", help="z or data dimension", default=6, type=int
         # )
@@ -39,7 +42,7 @@ class Options:
         self.parser.add_argument(
             "--z_dim", help="z or data dimension", default=40, type=int
         )
-        
+
         self.parser.add_argument(
             "--seq_len", help="sequence length", default=24, type=int
         )
@@ -48,25 +51,25 @@ class Options:
         )
         self.parser.add_argument(
             "--hidden_dim",
-            help="hidden state dimensions (should be optimized)",
+            help="hidden state dimensions (should be optimised)",
             default=24,
             type=int,
         )
         self.parser.add_argument(
             "--num_layer",
-            help="number of layers (should be optimized)",
+            help="number of layers (should be optimised)",
             default=3,
             type=int,
         )
         self.parser.add_argument(
             "--iteration",
-            help="Training iterations (should be optimized)",
-            default=50000,
+            help="Training iterations (should be optimised)",
+            default=NUM_TRAINING_ITERATIONS,
             type=int,
         )
         self.parser.add_argument(
             "--batch_size",
-            help="the number of samples in mini-batch (should be optimized)",
+            help="the number of samples in mini-batch (should be optimised)",
             default=128,
             type=int,
         )
