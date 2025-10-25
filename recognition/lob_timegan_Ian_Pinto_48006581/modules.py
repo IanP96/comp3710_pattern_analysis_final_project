@@ -49,6 +49,7 @@ Note: Use original data as training set to generater synthetic data (time-series
 import os
 import logging
 import random
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -238,6 +239,10 @@ class Discriminator(nn.Module):
 class TimeGAN:
     """TimeGAN Class"""
 
+    @property
+    def name(self):
+        return "TimeGAN"
+
     def seed(self, seed_value: int) -> None:
         """
         Seed all functionality.
@@ -256,10 +261,6 @@ class TimeGAN:
         torch.cuda.manual_seed_all(seed_value)
         np.random.seed(seed_value)
         torch.backends.cudnn.deterministic = True
-
-    @property
-    def name(self):
-        return "TimeGAN"
 
     def __init__(self, opt, ori_data):
 
@@ -514,9 +515,11 @@ class TimeGAN:
             epoch ([int]): Current epoch number.
         """
 
-        weight_dir = os.path.join(self.opt.outf, self.opt.name, "train", "weights")
-        if not os.path.exists(weight_dir):
-            os.makedirs(weight_dir)
+        weight_dir = Path(self.opt.outf, self.opt.name, "train", "weights")
+        logger.info("Saving network weights to directory: %s ...", weight_dir)
+        if not weight_dir.exists():
+            weight_dir.mkdir(parents=True, exist_ok=True)
+            logger.debug("Created directory to save weights.")
 
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
