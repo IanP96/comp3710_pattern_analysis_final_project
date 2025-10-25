@@ -60,22 +60,24 @@ import numpy as np
 from dataset import batch_generator
 from utils import extract_time, random_generator, NormMinMax, TORCH_DEVICE
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def _weights_init(m):
-    classname = m.__class__.__name__
-    if isinstance(m, nn.Linear):
-        init.xavier_uniform_(m.weight)
-        m.bias.data.fill_(0)
+def _weights_init(module: nn.Module) -> None:
+    # assert isinstance(module, nn.Module), "module passed to _weights_init is not of type nn.Module"
+    classname = module.__class__.__name__
+    if isinstance(module, nn.Linear):
+        init.xavier_uniform_(module.weight)
+        module.bias.data.fill_(0)
     elif classname.find("Conv") != -1:
-        m.weight.data.normal_(0.0, 0.02)
+        module.weight.data.normal_(0.0, 0.02)
     elif classname.find("Norm") != -1:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
+        module.weight.data.normal_(1.0, 0.02)
+        module.bias.data.fill_(0)
     elif classname.find("GRU") != -1:
-        for name, param in m.named_parameters():
+        for name, param in module.named_parameters():
             if "weight_ih" in name:
                 init.xavier_uniform_(param.data)
             elif "weight_hh" in name:
@@ -96,7 +98,7 @@ class Encoder(nn.Module):
     """
 
     def __init__(self, opt):
-        super(Encoder, self).__init__()
+        super().__init__()
         self.rnn = nn.GRU(
             input_size=opt.z_dim, hidden_size=opt.hidden_dim, num_layers=opt.num_layer
         )

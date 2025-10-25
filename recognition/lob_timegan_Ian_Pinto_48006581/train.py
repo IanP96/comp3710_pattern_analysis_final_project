@@ -28,9 +28,6 @@ train.py
   - Predictive score
 """
 
-
-import os
-
 from options import Options
 from dataset import load_data
 from modules import TimeGAN

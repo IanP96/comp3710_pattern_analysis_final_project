@@ -28,12 +28,14 @@ data.py
 
 import logging
 from pathlib import Path
+from argparse import Namespace
 
 # from os.path import dirname, abspath
 import numpy as np
 
 from utils import DATA_DIR, ORDERBOOK_DATA_FILENAME
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -101,6 +103,26 @@ def real_data_loading(seq_len):
       - data: preprocessed data.
     """
 
+    pass
+
+
+def load_data(opt: Namespace):
+    """
+    Load and preprocess stock data
+
+    Args:
+        opt (Options): command-line options. opt.seq_len should be the sequence length for slicing
+
+    Returns:
+        preprocessed data
+    """
+    # todo update docstring
+
+    logger.info("Loading and preprocessing stock dataset...")
+    
+    # Data loading
+    seq_len = opt.seq_len
+
     original_data = np.loadtxt(
         Path("data", ORDERBOOK_DATA_FILENAME), delimiter=",", skiprows=0
     )
@@ -125,21 +147,8 @@ def real_data_loading(seq_len):
     for i in range(len(temp_data)):
         data.append(temp_data[idx[i]])
 
-    return data
-
-
-def load_data(opt):
-    # Data loading
-    # if opt.data_name in ["stock", "energy"]:
-    #     ori_data = real_data_loading(opt.data_name, opt.seq_len)  # list: 3661; [24,6]
-    # elif opt.data_name == "sine":
-    #     # Set number of samples and its dimensions
-    #     no, dim = 10000, 5
-    #     ori_data = sine_data_generation(no, opt.seq_len, dim)
-    original_data = real_data_loading(opt.seq_len)  # list: 3661; [24,6]
     logger.info("Stock dataset has been loaded.")
-
-    return original_data
+    return data  # list: 3661; [24,6]
 
 
 def batch_generator(data, time, batch_size):

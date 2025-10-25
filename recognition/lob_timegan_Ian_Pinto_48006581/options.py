@@ -169,10 +169,11 @@ class Options:
         self.isTrain = True
         self.opt = None
 
-    def parse(self):
+    def parse(self) -> argparse.Namespace:
         """Parse Arguments."""
 
         self.opt = self.parser.parse_args()
+        self.opt.data_name = "stock"
         self.opt.isTrain = self.isTrain  # train or test
 
         # str_ids = self.opt.gpu_ids.split(",")

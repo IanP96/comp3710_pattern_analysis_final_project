@@ -37,3 +37,8 @@
 - Should ensure consistency of data i.e. asks higher than bids etc
   - Idea - what if I set the discriminator to always give an output of 0 (fake) for data that
     violated the ask > bid property?
+
+# Model
+
+- 40 features (10 levels of LOBSTER data. Each level gives bid price, bid volume, ask price, ask
+  volume)

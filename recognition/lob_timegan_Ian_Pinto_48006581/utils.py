@@ -24,6 +24,7 @@ import logging
 import numpy as np
 import torch
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
