@@ -665,7 +665,13 @@ class TimeGAN:
 
         self.save_weights(self.opt.iteration)
         self.generated_data = self.generation(self.opt.batch_size)
-        logger.info("Finished synthetic data generation.")
+        GENERATED_DATA_PATH = Path("generated_data.txt")
+        with open(GENERATED_DATA_PATH, "w") as file:
+            file.write(str(self.generated_data))
+        logger.info(
+            "Finished synthetic data generation and written synthetic data to %s",
+            GENERATED_DATA_PATH,
+        )
 
     # self.evaluation()
 
