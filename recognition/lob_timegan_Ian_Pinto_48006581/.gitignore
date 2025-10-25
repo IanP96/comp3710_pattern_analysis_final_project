@@ -9,3 +9,6 @@ __pycache__
 
 # Options file
 opt.txt
+
+# VSCode
+.vscode
