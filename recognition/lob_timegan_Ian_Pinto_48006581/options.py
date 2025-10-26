@@ -62,11 +62,14 @@ class Options:
             default=3,
             type=int,
         )
+        # self.parser.add_argument(
+        #     "--iteration",
+        #     help="Training iterations (should be optimised)",
+        #     default=NUM_TRAINING_ITERATIONS,
+        #     type=int,
+        # )
         self.parser.add_argument(
-            "--iteration",
-            help="Training iterations (should be optimised)",
-            default=NUM_TRAINING_ITERATIONS,
-            type=int,
+            "--env", choices=["local", "rangpur"], type=str, required=True
         )
         self.parser.add_argument(
             "--batch_size",

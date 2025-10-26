@@ -61,7 +61,12 @@ from numpy.typing import NDArray
 
 from dataset import batch_generator
 from utils import extract_time, random_generator, norm_min_max, TORCH_DEVICE
-from constants import WEIGHTS_DIR, OUTPUT_DIR
+from constants import (
+    WEIGHTS_DIR,
+    OUTPUT_DIR,
+    RANGPUR_NUM_TRAINING_ITERATIONS,
+    LOCAL_NUM_TRAINING_ITERATIONS,
+)
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -294,6 +299,14 @@ class TimeGAN:
         self.netg = Generator(self.opt).to(self.device)
         self.netd = Discriminator(self.opt).to(self.device)
         self.nets = Supervisor(self.opt).to(self.device)
+        
+        self.num_iterations: int
+        if self.opt.env == "rangpur":
+            self.num_iterations = RANGPUR_NUM_TRAINING_ITERATIONS
+        elif self.opt.env == "local":
+            self.num_iterations = LOCAL_NUM_TRAINING_ITERATIONS
+        else:
+            raise ValueError(f"Unknown environment: {self.opt.env}")
 
         weights_path = Path(OUTPUT_DIR, WEIGHTS_DIR)
         if resume and weights_path.exists():
@@ -533,23 +546,23 @@ class TimeGAN:
 
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
-            Path(weight_dir, "netE.pth")
+            Path(weight_dir, "netE.pth"),
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.netr.state_dict()},
-            Path(weight_dir, "netR.pth")
+            Path(weight_dir, "netR.pth"),
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.netg.state_dict()},
-            Path(weight_dir, "netG.pth")
+            Path(weight_dir, "netG.pth"),
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.netd.state_dict()},
-            Path(weight_dir, "netD.pth")
+            Path(weight_dir, "netD.pth"),
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.nets.state_dict()},
-            Path(weight_dir, "netS.pth")
+            Path(weight_dir, "netS.pth"),
         )
 
     def train_one_iter_er(self):
@@ -644,29 +657,29 @@ class TimeGAN:
         """Train the model and generate some synthetic data"""
         logger.info("Model training started...")
 
-        for iter in range(self.opt.iteration):
+        for iter in range(self.num_iterations):
             # Train for one iter
             self.train_one_iter_er()
-            logger.info("Encoder training step: %s/%s", iter + 1, self.opt.iteration)
+            logger.info("Encoder training step: %s/%s", iter + 1, self.num_iterations)
 
-        for iter in range(self.opt.iteration):
+        for iter in range(self.num_iterations):
             # Train for one iter
             self.train_one_iter_s()
             logger.debug(
-                "Supervisor training step: %s/%s", iter + 1, self.opt.iteration
+                "Supervisor training step: %s/%s", iter + 1, self.num_iterations
             )
 
-        for iter in range(self.opt.iteration):
+        for iter in range(self.num_iterations):
             # Train for one iter
             for kk in range(2):
                 self.train_one_iter_g()
                 self.train_one_iter_er_()
             self.train_one_iter_d()
             logger.debug(
-                "Supervisor training step: %s/%s", iter + 1, self.opt.iteration
+                "Supervisor training step: %s/%s", iter + 1, self.num_iterations
             )
 
-        self.save_weights(self.opt.iteration)
+        self.save_weights(self.num_iterations)
         self.generated_data = self.generation(self.opt.batch_size)
         GENERATED_DATA_PATH = Path("generated_data.npy")
         np.save(GENERATED_DATA_PATH, self.generated_data)
