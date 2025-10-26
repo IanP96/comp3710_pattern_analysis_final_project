@@ -42,3 +42,7 @@
 
 - 40 features (10 levels of LOBSTER data. Each level gives bid price, bid volume, ask price, ask
   volume)
+- Slices are shuffled before training. Good for learning statistical patterns, not so much for
+  long-term trends
+- Slice size of 24 could maybe be longer if I wanted the model to learn long-term patterns better
+- 

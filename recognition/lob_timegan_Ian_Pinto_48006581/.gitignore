@@ -4,8 +4,9 @@
 # Python
 __pycache__
 
-# PyTorch
+# PyTorch and NumPy binaries
 *.pth
+*.npy
 
 # Options file
 opt.txt

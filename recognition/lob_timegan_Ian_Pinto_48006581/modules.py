@@ -61,6 +61,7 @@ from numpy.typing import NDArray
 
 from dataset import batch_generator
 from utils import extract_time, random_generator, norm_min_max, TORCH_DEVICE
+from constants import WEIGHTS_DIR, OUTPUT_DIR
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -265,7 +266,7 @@ class TimeGAN:
         np.random.seed(seed_value)
         torch.backends.cudnn.deterministic = True
 
-    def __init__(self, opt: Namespace, ori_data: NDArray[np.float32]):
+    def __init__(self, opt: Namespace, ori_data: NDArray[np.float32], resume=True):
 
         # Seed for deterministic behavior
         self.seed(opt.manualseed)
@@ -273,11 +274,13 @@ class TimeGAN:
         # Initalise variables
         self.opt = opt
         self.ori_data, self.min_val, self.max_val = norm_min_max(ori_data)
-        logger.debug("From normalising, got min_val: %s, max_val: %s", self.min_val, self.max_val)
+        logger.debug(
+            "From normalising, got min_val: %s, max_val: %s", self.min_val, self.max_val
+        )
         self.ori_time, self.max_seq_len = extract_time(self.ori_data)
         self.data_num, _, _ = np.asarray(ori_data).shape  # 3661; 24; 6
-        self.trn_dir = os.path.join(self.opt.outf, self.opt.name, "train")
-        self.tst_dir = os.path.join(self.opt.outf, self.opt.name, "test")
+        # self.trn_dir = os.path.join(self.opt.outf, self.opt.name, "train")
+        # self.tst_dir = os.path.join(self.opt.outf, self.opt.name, "test")
         self.device = TORCH_DEVICE
 
         # -- Misc attributes
@@ -292,29 +295,31 @@ class TimeGAN:
         self.netd = Discriminator(self.opt).to(self.device)
         self.nets = Supervisor(self.opt).to(self.device)
 
-        if self.opt.resume != "":
+        weights_path = Path(OUTPUT_DIR, WEIGHTS_DIR)
+        if resume and weights_path.exists():
+            # assert weights_path.exists(), f"Weights path {weights_path} does not exist."
             logger.info(
-                "Loading pre-trained networks from directory: %s ...", self.opt.resume
+                "Loading pre-trained networks from directory: %s ...", weights_path
             )
-            self.opt.iter = torch.load(os.path.join(self.opt.resume, "netG.pth"))[
-                "epoch"
-            ]
+            # self.opt.iteration = torch.load(Path(weights_path, "netG.pth"))["epoch"]
             self.nete.load_state_dict(
-                torch.load(os.path.join(self.opt.resume, "netE.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netE.pth"))["state_dict"]
             )
             self.netr.load_state_dict(
-                torch.load(os.path.join(self.opt.resume, "netR.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netR.pth"))["state_dict"]
             )
             self.netg.load_state_dict(
-                torch.load(os.path.join(self.opt.resume, "netG.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netG.pth"))["state_dict"]
             )
             self.netd.load_state_dict(
-                torch.load(os.path.join(self.opt.resume, "netD.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netD.pth"))["state_dict"]
             )
             self.nets.load_state_dict(
-                torch.load(os.path.join(self.opt.resume, "netS.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netS.pth"))["state_dict"]
             )
             logger.info("Finished loading pre-trained networks.")
+        else:
+            logger.info("Not using pre-trained weights. Training from scratch.")
 
         # loss
         self.l_mse = nn.MSELoss()
@@ -520,7 +525,7 @@ class TimeGAN:
             epoch ([int]): Current epoch number.
         """
 
-        weight_dir = Path(self.opt.outf, self.opt.name, "train", "weights")
+        weight_dir = Path(OUTPUT_DIR, WEIGHTS_DIR)
         logger.info("Saving network weights to directory: %s ...", weight_dir)
         if not weight_dir.exists():
             weight_dir.mkdir(parents=True, exist_ok=True)
@@ -528,23 +533,23 @@ class TimeGAN:
 
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
-            "%s/netE.pth" % (weight_dir),
+            Path(weight_dir, "netE.pth")
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.netr.state_dict()},
-            "%s/netR.pth" % (weight_dir),
+            Path(weight_dir, "netR.pth")
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.netg.state_dict()},
-            "%s/netG.pth" % (weight_dir),
+            Path(weight_dir, "netG.pth")
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.netd.state_dict()},
-            "%s/netD.pth" % (weight_dir),
+            Path(weight_dir, "netD.pth")
         )
         torch.save(
             {"epoch": epoch + 1, "state_dict": self.nets.state_dict()},
-            "%s/netS.pth" % (weight_dir),
+            Path(weight_dir, "netS.pth")
         )
 
     def train_one_iter_er(self):
@@ -647,7 +652,9 @@ class TimeGAN:
         for iter in range(self.opt.iteration):
             # Train for one iter
             self.train_one_iter_s()
-            logger.debug("Supervisor training step: %s/%s", iter + 1, self.opt.iteration)
+            logger.debug(
+                "Supervisor training step: %s/%s", iter + 1, self.opt.iteration
+            )
 
         for iter in range(self.opt.iteration):
             # Train for one iter
@@ -655,26 +662,27 @@ class TimeGAN:
                 self.train_one_iter_g()
                 self.train_one_iter_er_()
             self.train_one_iter_d()
-            logger.debug("Supervisor training step: %s/%s", iter + 1, self.opt.iteration)
+            logger.debug(
+                "Supervisor training step: %s/%s", iter + 1, self.opt.iteration
+            )
 
         self.save_weights(self.opt.iteration)
         self.generated_data = self.generation(self.opt.batch_size)
-        GENERATED_DATA_PATH = Path("generated_data.txt")
-        with open(GENERATED_DATA_PATH, "w") as file:
-            file.write(str(self.generated_data[:10]))
+        GENERATED_DATA_PATH = Path("generated_data.npy")
+        np.save(GENERATED_DATA_PATH, self.generated_data)
         logger.info(
             "Finished synthetic data generation and written synthetic data to %s",
             GENERATED_DATA_PATH,
         )
 
-
     def generation(self, num_samples: int, mean=0.0, std=1.0) -> NDArray[np.float32]:
+
         assert num_samples > 0, "num_samples should be a positive integer."
+
         # Synthetic data generation
         self.X0, self.T = batch_generator(
             self.ori_data, self.ori_time, self.opt.batch_size
         )
-        # todo number of paramters given is most likely wrong, fix
         self.Z = random_generator(
             num_samples, self.opt.z_dim, self.T, self.max_seq_len, mean, std
         )
@@ -686,7 +694,9 @@ class TimeGAN:
         )  # [?, 24, 24]
         logger.debug("generated_data_curr shape: %s", generated_data_curr.shape)
 
-        generated_data = np.empty((num_samples, self.max_seq_len, self.opt.z_dim), dtype=np.float32)
+        generated_data = np.empty(
+            (num_samples, self.max_seq_len, self.opt.z_dim), dtype=np.float32
+        )
         for i in range(num_samples):
             temp = generated_data_curr[i, : self.ori_time[i], :]
             generated_data[i] = temp
@@ -694,4 +704,7 @@ class TimeGAN:
         # Renormalisation
         generated_data = generated_data * self.max_val
         generated_data = generated_data + self.min_val
-        return generated_data
+
+        # Reshape to 2D
+        generated_data_2d = generated_data.reshape(-1, generated_data.shape[2])
+        return generated_data_2d

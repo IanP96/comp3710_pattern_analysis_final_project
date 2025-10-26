@@ -12,6 +12,7 @@ import os
 # import torch
 
 from utils import NUM_TRAINING_ITERATIONS
+from constants import WEIGHTS_DIR, OUTPUT_DIR
 
 
 class Options:
@@ -73,12 +74,12 @@ class Options:
             default=128,
             type=int,
         )
-        self.parser.add_argument(
-            "--metric_iteration",
-            help="iterations of the metric computation",
-            default=10,
-            type=int,
-        )
+        # self.parser.add_argument(
+        #     "--metric_iteration",
+        #     help="iterations of the metric computation",
+        #     default=10,
+        #     type=int,
+        # )
 
         # Add
         self.parser.add_argument(
@@ -103,14 +104,14 @@ class Options:
             help="chooses which model to use. timegan",
         )
 
-        self.parser.add_argument(
-            "--outf",
-            default="./output",
-            help="folder to output images and model checkpoints",
-        )
-        self.parser.add_argument(
-            "--name", type=str, default="experiment_name", help="name of the experiment"
-        )
+        # self.parser.add_argument(
+        #     "--outf",
+        #     default="./output",
+        #     help="folder to output images and model checkpoints",
+        # )
+        # self.parser.add_argument(
+        #     "--name", type=str, default="experiment_name", help="name of the experiment"
+        # )
 
         self.parser.add_argument(
             "--display_server",
@@ -140,12 +141,12 @@ class Options:
             default=1000,
             help="frequency of showing training results on console",
         )
-        self.parser.add_argument(
-            "--load_weights", action="store_true", help="Load the pretrained weights"
-        )
-        self.parser.add_argument(
-            "--resume", default="", help="path to checkpoints (to continue training)"
-        )
+        # self.parser.add_argument(
+        #     "--load_weights", action="store_true", help="Load the pretrained weights"
+        # )
+        # self.parser.add_argument(
+        #     "--resume", default="", help="path to checkpoints (to continue training)"
+        # )
 
         self.parser.add_argument(
             "--beta1", type=float, default=0.9, help="momentum term of adam"
@@ -190,9 +191,9 @@ class Options:
         args = vars(self.opt)
 
         # save to the disk
-        if self.opt.name == "experiment_name":
-            self.opt.name = "%s/%s" % (self.opt.model, self.opt.data_name)
-        expr_dir = os.path.join(self.opt.outf, self.opt.name)
+        # if self.opt.name == "experiment_name":
+        #     self.opt.name = "%s/%s" % (self.opt.model, self.opt.data_name)
+        expr_dir = OUTPUT_DIR
 
         if not os.path.isdir(expr_dir):
             os.makedirs(expr_dir)
