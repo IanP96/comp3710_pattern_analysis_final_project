@@ -9,8 +9,8 @@ For COMP3710 at The University of Queensland
 # Project brief
 
 Train a generative time-series model such as TimeGAN to generate synthetic sequences of limit order
-book (LOB) events using the [LOBSTER dataset](https://lobsterdata.com/info/DataSamples.php) (Use AMZN level 10 data). Evaluate on a held-out test
-split using the following metrics:
+book (LOB) events using the [LOBSTER dataset](https://lobsterdata.com/info/DataSamples.php) (Use
+AMZN level 10 data). Evaluate on a held-out test split using the following metrics:
 
 - **Distribution similarity**: KL divergence ≤ 0.1 between the generated and real spread and
   midprice return distributions.

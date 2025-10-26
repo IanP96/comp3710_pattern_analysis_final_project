@@ -68,7 +68,6 @@ logger.setLevel(logging.DEBUG)
 
 
 def _weights_init(module: nn.Module) -> None:
-    # assert isinstance(module, nn.Module), "module passed to _weights_init is not of type nn.Module"
     classname = module.__class__.__name__
     if isinstance(module, nn.Linear):
         init.xavier_uniform_(module.weight)
@@ -590,7 +589,7 @@ class TimeGAN:
         )
         self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
 
-        # train superviser
+        # train supervisor
         self.optimize_params_s()
 
     def train_one_iter_g(self):
@@ -611,7 +610,7 @@ class TimeGAN:
             self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
         )
 
-        # train superviser
+        # train supervisor
         self.optimize_params_g()
 
     def train_one_iter_d(self):
@@ -633,11 +632,11 @@ class TimeGAN:
             self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
         )
 
-        # train superviser
+        # train supervisor
         self.optimize_params_d()
 
-    def train(self):
-        """Train the model"""
+    def train_and_generate(self):
+        """Train the model and generate some synthetic data"""
         logger.info("Model training started...")
 
         for iter in range(self.opt.iteration):
@@ -648,7 +647,7 @@ class TimeGAN:
         for iter in range(self.opt.iteration):
             # Train for one iter
             self.train_one_iter_s()
-            logger.debug("Superviser training step: %s/%s", iter + 1, self.opt.iteration)
+            logger.debug("Supervisor training step: %s/%s", iter + 1, self.opt.iteration)
 
         for iter in range(self.opt.iteration):
             # Train for one iter
@@ -656,7 +655,7 @@ class TimeGAN:
                 self.train_one_iter_g()
                 self.train_one_iter_er_()
             self.train_one_iter_d()
-            logger.debug("Superviser training step: %s/%s", iter + 1, self.opt.iteration)
+            logger.debug("Supervisor training step: %s/%s", iter + 1, self.opt.iteration)
 
         self.save_weights(self.opt.iteration)
         self.generated_data = self.generation(self.opt.batch_size)
@@ -668,35 +667,6 @@ class TimeGAN:
             GENERATED_DATA_PATH,
         )
 
-    # self.evaluation()
-
-    # def evaluation(self):
-    #     ## Performance metrics
-    #     # Output initialization
-    #     metric_results = dict()
-
-    #     # 1. Discriminative Score
-    #     discriminative_score = list()
-    #     for _ in range(self.opt.metric_iteration):
-    #         temp_disc = discriminative_score_metrics(self.ori_data, self.generated_data)
-    #         discriminative_score.append(temp_disc)
-
-    #     metric_results['discriminative'] = np.mean(discriminative_score)
-
-    #     # 2. Predictive score
-    #     predictive_score = list()
-    #     for tt in range(self.opt.metric_iteration):
-    #         temp_pred = predictive_score_metrics(self.ori_data, self.generated_data)
-    #         predictive_score.append(temp_pred)
-
-    #     metric_results['predictive'] = np.mean(predictive_score)
-
-    #     # 3. Visualization (PCA and tSNE)
-    #     visualization(self.ori_data, self.generated_data, 'pca')
-    #     visualization(self.ori_data, self.generated_data, 'tsne')
-
-    #     ## Print discriminative and predictive scores
-    #     print(metric_results)
 
     def generation(self, num_samples: int, mean=0.0, std=1.0) -> NDArray[np.float32]:
         assert num_samples > 0, "num_samples should be a positive integer."
@@ -714,6 +684,7 @@ class TimeGAN:
         generated_data_curr: NDArray = (
             self.netr(self.H_hat).cpu().detach().numpy()
         )  # [?, 24, 24]
+        logger.debug("generated_data_curr shape: %s", generated_data_curr.shape)
 
         generated_data = np.empty((num_samples, self.max_seq_len, self.opt.z_dim), dtype=np.float32)
         for i in range(num_samples):

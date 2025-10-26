@@ -48,7 +48,7 @@ def train():
     model = TimeGAN(command_line_options, original_data)
 
     # Train model
-    model.train()
+    model.train_and_generate()
 
 
 if __name__ == "__main__":
