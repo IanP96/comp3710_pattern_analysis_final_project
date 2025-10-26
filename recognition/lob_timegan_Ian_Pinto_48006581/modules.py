@@ -50,6 +50,7 @@ import logging
 import random
 from pathlib import Path
 from argparse import Namespace
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -677,7 +678,10 @@ class TimeGAN:
 
     def train_and_generate(self):
         """Train the model and generate some synthetic data"""
-        logger.info("Model training started...")
+        
+        now = datetime.now()
+        formatted_datetime = now.strftime("%B %d, %Y %I:%M%p")
+        logger.info("Model training started at %s ...", formatted_datetime)
 
         for iter in range(self.num_iterations):
             # Train for one iter
@@ -711,8 +715,12 @@ class TimeGAN:
                 )
                 logger.debug("Generated data shape: %s", generated_data.shape)
                 logger.debug("Validation data shape: %s", self.validate_data.shape)
-                kl_spread = kl_metric(self.validate_data, generated_data, "spread")
-                kl_mpr = kl_metric(self.validate_data, generated_data, "mpr")
+                try:
+                    kl_spread = kl_metric(self.validate_data, generated_data, "spread")
+                    kl_mpr = kl_metric(self.validate_data, generated_data, "mpr")
+                except AssertionError:
+                    logger.exception("KL metric computation failed, got error:")
+                    continue
                 logger.info(
                     "Metrics: KL Spread: %s, KL mid-price return: %s", kl_spread, kl_mpr
                 )
@@ -726,6 +734,10 @@ class TimeGAN:
                 #     logger.info("Early stopping at iteration %s", iter)
                 #     break
 
+        now = datetime.now()
+        formatted_datetime = now.strftime("%B %d, %Y %I:%M%p")
+        logger.info("Training finished at %s.", formatted_datetime)
+        
         self.save_weights(self.num_iterations)
         self.generated_data = self.generation(
             self.opt.batch_size, self.test_max_val, self.test_min_val
@@ -738,26 +750,27 @@ class TimeGAN:
         )
 
     def generation(
-        self, num_samples: int, max_val: NDArray, min_val: NDArray, mean=0.0, std=1.0
+        self, num_rows: int, max_val: NDArray, min_val: NDArray, mean=0.0, std=1.0
     ) -> NDArray[np.float32]:
 
-        assert num_samples > 0, "num_samples should be a positive integer."
+        assert num_rows > 0, "num_samples should be a positive integer."
 
         # Synthetic data generation
         self.X0, self.T = batch_generator(
             self.ori_data, self.ori_time, self.opt.batch_size
         )
-        num_batches = num_samples // self.opt.batch_size
+        num_batches = num_rows // self.max_seq_len
         # todo figure this out
         self.Z = random_generator(
             num_batches, self.opt.z_dim, self.opt.seq_len, mean, std
         )
         self.Z = torch.tensor(self.Z, dtype=torch.float32).to(self.device)
-        self.E_hat = self.netg(self.Z)  # [?, 24, 24]
-        self.H_hat = self.nets(self.E_hat)  # [?, 24, 24]
-        generated_data_curr: NDArray = (
-            self.netr(self.H_hat).cpu().detach().numpy()
-        )  # [?, 24, 24]
+        with torch.no_grad():
+            self.E_hat = self.netg(self.Z)  # [?, 24, 24]
+            self.H_hat = self.nets(self.E_hat)  # [?, 24, 24]
+            generated_data_curr: NDArray = (
+                self.netr(self.H_hat).cpu().detach().numpy()
+            )  # [?, 24, 24]
 
         generated_data = np.empty(
             (num_batches, self.max_seq_len, self.opt.z_dim), dtype=np.float32

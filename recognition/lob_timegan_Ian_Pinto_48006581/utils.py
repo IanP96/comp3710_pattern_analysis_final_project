@@ -131,7 +131,10 @@ def norm_min_max(
 
 
 def kl_metric(
-    original_data: NDArray, generated_data: NDArray, metric_type: str, show_plot: bool = False
+    original_data: NDArray,
+    generated_data: NDArray,
+    metric_type: str,
+    show_plot: bool = False,
 ) -> float:
 
     # best ask is feature 0, best bid is feature 2
@@ -157,6 +160,8 @@ def kl_metric(
         hist_values, bins = np.histogram(
             source_data, bins=100, density=True, range=bin_range
         )
+        hist_values += 1e-12  # avoid zero values
+        hist_values = hist_values / np.sum(hist_values)  # normalise
         real_and_generated.append(hist_values)
     assert bins is not None
     dx = bins[1] - bins[0]
@@ -174,5 +179,7 @@ def kl_metric(
         plt.show()
     kl_divergence = np.sum(real * np.log(real / generated)).item() * dx
     assert isinstance(kl_divergence, float)
-    assert kl_divergence > -1e-6, "KL Divergence should be non-negative"
+    assert (
+        kl_divergence > -1e-6
+    ), f"KL Divergence for metric {metric_type} should be non-negative but was {kl_divergence}"
     return kl_divergence
