@@ -134,7 +134,8 @@ def load_data(opt: Namespace) -> NDArray[np.float32]:
     filtered_data_float = filtered_data.astype("float32")
 
     # Normalise the data
-    filtered_data_float = min_max_scaler(filtered_data_float)
+    # todo this is likely not necessary as data gets normalised in TimeGAN.__init__
+    # filtered_data_float = min_max_scaler(filtered_data_float)
 
     # Get dimensions
     n_samples = filtered_data_float.shape[0]

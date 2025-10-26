@@ -662,7 +662,7 @@ class TimeGAN:
         self.generated_data = self.generation(self.opt.batch_size)
         GENERATED_DATA_PATH = Path("generated_data.txt")
         with open(GENERATED_DATA_PATH, "w") as file:
-            file.write(str(self.generated_data))
+            file.write(str(self.generated_data[:10]))
         logger.info(
             "Finished synthetic data generation and written synthetic data to %s",
             GENERATED_DATA_PATH,
@@ -698,9 +698,8 @@ class TimeGAN:
     #     ## Print discriminative and predictive scores
     #     print(metric_results)
 
-    def generation(self, num_samples: int, mean=0.0, std=1.0):
-        if num_samples == 0:
-            return None, None
+    def generation(self, num_samples: int, mean=0.0, std=1.0) -> NDArray[np.float32]:
+        assert num_samples > 0, "num_samples should be a positive integer."
         # Synthetic data generation
         self.X0, self.T = batch_generator(
             self.ori_data, self.ori_time, self.opt.batch_size
@@ -712,14 +711,14 @@ class TimeGAN:
         self.Z = torch.tensor(self.Z, dtype=torch.float32).to(self.device)
         self.E_hat = self.netg(self.Z)  # [?, 24, 24]
         self.H_hat = self.nets(self.E_hat)  # [?, 24, 24]
-        generated_data_curr: np.ndarray = (
+        generated_data_curr: NDArray = (
             self.netr(self.H_hat).cpu().detach().numpy()
         )  # [?, 24, 24]
 
-        generated_data = list()
+        generated_data = np.empty((num_samples, self.max_seq_len, self.opt.z_dim), dtype=np.float32)
         for i in range(num_samples):
             temp = generated_data_curr[i, : self.ori_time[i], :]
-            generated_data.append(temp)
+            generated_data[i] = temp
 
         # Renormalisation
         generated_data = generated_data * self.max_val
