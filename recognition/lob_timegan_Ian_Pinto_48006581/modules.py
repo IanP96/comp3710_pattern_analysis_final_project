@@ -46,7 +46,6 @@ timegan.py
 Note: Use original data as training set to generater synthetic data (time-series)
 """
 
-import os
 import logging
 import random
 from pathlib import Path
@@ -60,12 +59,14 @@ import numpy as np
 from numpy.typing import NDArray
 
 from dataset import batch_generator
-from utils import extract_time, random_generator, norm_min_max, TORCH_DEVICE
+from utils import extract_time, random_generator, norm_min_max, TORCH_DEVICE, kl_metric
 from constants import (
     WEIGHTS_DIR,
     OUTPUT_DIR,
     RANGPUR_NUM_TRAINING_ITERATIONS,
     LOCAL_NUM_TRAINING_ITERATIONS,
+    RANGPUR_VALIDATE_INTERVAL,
+    LOCAL_VALIDATE_INTERVAL,
 )
 
 logging.basicConfig()
@@ -271,7 +272,14 @@ class TimeGAN:
         np.random.seed(seed_value)
         torch.backends.cudnn.deterministic = True
 
-    def __init__(self, opt: Namespace, ori_data: NDArray[np.float32], resume=True):
+    def __init__(
+        self,
+        opt: Namespace,
+        ori_data: NDArray[np.float32],
+        validate_data: NDArray[np.float32],
+        test_data: NDArray[np.float32],
+        resume=True,
+    ):
 
         # Seed for deterministic behavior
         self.seed(opt.manualseed)
@@ -279,6 +287,17 @@ class TimeGAN:
         # Initalise variables
         self.opt = opt
         self.ori_data, self.min_val, self.max_val = norm_min_max(ori_data)
+        self.validate_data = validate_data
+        self.test_data = test_data
+        assert len(self.validate_data.shape) == len(self.test_data.shape) == 2
+        self.validate_min_val, self.validate_max_val = (
+            np.min(self.validate_data, 0),
+            np.max(self.validate_data, 0) - np.min(self.validate_data, 0),
+        )
+        self.test_min_val, self.test_max_val = (
+            np.min(self.test_data, 0),
+            np.max(self.test_data, 0) - np.min(self.test_data, 0),
+        )
         logger.debug(
             "From normalising, got min_val: %s, max_val: %s", self.min_val, self.max_val
         )
@@ -299,12 +318,15 @@ class TimeGAN:
         self.netg = Generator(self.opt).to(self.device)
         self.netd = Discriminator(self.opt).to(self.device)
         self.nets = Supervisor(self.opt).to(self.device)
-        
+
         self.num_iterations: int
+        self.validate_interval: int
         if self.opt.env == "rangpur":
             self.num_iterations = RANGPUR_NUM_TRAINING_ITERATIONS
+            self.validate_interval = RANGPUR_VALIDATE_INTERVAL
         elif self.opt.env == "local":
             self.num_iterations = LOCAL_NUM_TRAINING_ITERATIONS
+            self.validate_interval = LOCAL_VALIDATE_INTERVAL
         else:
             raise ValueError(f"Unknown environment: {self.opt.env}")
 
@@ -625,7 +647,7 @@ class TimeGAN:
         )
         self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
         self.Z = random_generator(
-            self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
+            self.opt.batch_size, self.opt.z_dim, self.opt.seq_len
         )
 
         # train supervisor
@@ -647,7 +669,7 @@ class TimeGAN:
         )
         self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
         self.Z = random_generator(
-            self.opt.batch_size, self.opt.z_dim, self.T, self.max_seq_len
+            self.opt.batch_size, self.opt.z_dim, self.opt.seq_len
         )
 
         # train supervisor
@@ -669,6 +691,9 @@ class TimeGAN:
                 "Supervisor training step: %s/%s", iter + 1, self.num_iterations
             )
 
+        last_kl_spread = float("inf")
+        last_kl_mpr = float("inf")
+        increase_count = 0
         for iter in range(self.num_iterations):
             # Train for one iter
             for kk in range(2):
@@ -678,9 +703,33 @@ class TimeGAN:
             logger.debug(
                 "Supervisor training step: %s/%s", iter + 1, self.num_iterations
             )
+            if iter % self.validate_interval == 0:
+                generated_data = self.generation(
+                    len(self.validate_data),
+                    self.validate_max_val,
+                    self.validate_min_val,
+                )
+                logger.debug("Generated data shape: %s", generated_data.shape)
+                logger.debug("Validation data shape: %s", self.validate_data.shape)
+                kl_spread = kl_metric(self.validate_data, generated_data, "spread")
+                kl_mpr = kl_metric(self.validate_data, generated_data, "mpr")
+                logger.info(
+                    "Metrics: KL Spread: %s, KL mid-price return: %s", kl_spread, kl_mpr
+                )
+                if kl_spread > last_kl_spread or kl_mpr > last_kl_mpr:
+                    increase_count += 1
+                else:
+                    increase_count = 0
+                last_kl_spread = kl_spread
+                last_kl_mpr = kl_mpr
+                # if increase_count >= 3:
+                #     logger.info("Early stopping at iteration %s", iter)
+                #     break
 
         self.save_weights(self.num_iterations)
-        self.generated_data = self.generation(self.opt.batch_size)
+        self.generated_data = self.generation(
+            self.opt.batch_size, self.test_max_val, self.test_min_val
+        )
         GENERATED_DATA_PATH = Path("generated_data.npy")
         np.save(GENERATED_DATA_PATH, self.generated_data)
         logger.info(
@@ -688,7 +737,9 @@ class TimeGAN:
             GENERATED_DATA_PATH,
         )
 
-    def generation(self, num_samples: int, mean=0.0, std=1.0) -> NDArray[np.float32]:
+    def generation(
+        self, num_samples: int, max_val: NDArray, min_val: NDArray, mean=0.0, std=1.0
+    ) -> NDArray[np.float32]:
 
         assert num_samples > 0, "num_samples should be a positive integer."
 
@@ -696,8 +747,10 @@ class TimeGAN:
         self.X0, self.T = batch_generator(
             self.ori_data, self.ori_time, self.opt.batch_size
         )
+        num_batches = num_samples // self.opt.batch_size
+        # todo figure this out
         self.Z = random_generator(
-            num_samples, self.opt.z_dim, self.T, self.max_seq_len, mean, std
+            num_batches, self.opt.z_dim, self.opt.seq_len, mean, std
         )
         self.Z = torch.tensor(self.Z, dtype=torch.float32).to(self.device)
         self.E_hat = self.netg(self.Z)  # [?, 24, 24]
@@ -705,18 +758,17 @@ class TimeGAN:
         generated_data_curr: NDArray = (
             self.netr(self.H_hat).cpu().detach().numpy()
         )  # [?, 24, 24]
-        logger.debug("generated_data_curr shape: %s", generated_data_curr.shape)
 
         generated_data = np.empty(
-            (num_samples, self.max_seq_len, self.opt.z_dim), dtype=np.float32
+            (num_batches, self.max_seq_len, self.opt.z_dim), dtype=np.float32
         )
-        for i in range(num_samples):
+        for i in range(num_batches):
             temp = generated_data_curr[i, : self.ori_time[i], :]
             generated_data[i] = temp
 
         # Renormalisation
-        generated_data = generated_data * self.max_val
-        generated_data = generated_data + self.min_val
+        generated_data = generated_data * max_val
+        generated_data = generated_data + min_val
 
         # Reshape to 2D
         generated_data_2d = generated_data.reshape(-1, generated_data.shape[2])

@@ -34,7 +34,7 @@ from argparse import Namespace
 import numpy as np
 from numpy.typing import NDArray
 
-from utils import DATA_DIR, ORDERBOOK_DATA_FILENAME
+from constants import TRAIN_TEST_VALIDATE, DATA_DIR, ORDERBOOK_DATA_FILENAME
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def min_max_scaler(data: NDArray[np.float32]) -> NDArray[np.float32]:
     return norm_data
 
 
-def load_data(opt: Namespace) -> NDArray[np.float32]:
+def load_data(opt: Namespace) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
     """
     Load and preprocess stock data
 
@@ -73,8 +73,11 @@ def load_data(opt: Namespace) -> NDArray[np.float32]:
     # Data loading
     seq_len = opt.seq_len
 
-    original_data = np.loadtxt(
-        Path("data", ORDERBOOK_DATA_FILENAME), delimiter=",", skiprows=0, dtype=np.int64
+    raw_data = np.loadtxt(
+        Path(DATA_DIR, ORDERBOOK_DATA_FILENAME),
+        delimiter=",",
+        skiprows=0,
+        dtype=np.int64,
     )
 
     # If the data is in reverse chronological data (the LOBSTER data isn't), flip the data to make
@@ -91,7 +94,19 @@ def load_data(opt: Namespace) -> NDArray[np.float32]:
     # respectively. The Corresponding volumes are set to 0.
     # ---
     # So remove any rows where this applies
-    filtered_data = np.array([row for row in original_data if 0 not in row])
+    filtered_data = np.array([row for row in raw_data if 0 not in row])
+    logger.debug("Filtered data shape: %s", filtered_data.shape)
+
+    # Train split
+    train_cutoff = int(len(filtered_data) * TRAIN_TEST_VALIDATE[0])
+    validate_cutoff = int(
+        len(filtered_data) * (TRAIN_TEST_VALIDATE[0] + TRAIN_TEST_VALIDATE[1])
+    )
+    logger.debug("Train cutoff: %d, Validate cutoff: %d", train_cutoff, validate_cutoff)
+    train_data = filtered_data[:train_cutoff]
+    validate_data = filtered_data[train_cutoff:validate_cutoff]
+    test_data = filtered_data[validate_cutoff:]
+    assert all(len(data) > 5 for data in (train_data, validate_data, test_data))
 
     filtered_data_float = filtered_data.astype("float32")
 
@@ -114,7 +129,7 @@ def load_data(opt: Namespace) -> NDArray[np.float32]:
     np.random.shuffle(sliced_data)
 
     logger.info("Stock dataset has been loaded and preprocessed.")
-    return sliced_data
+    return sliced_data, validate_data, test_data
 
 
 def batch_generator(

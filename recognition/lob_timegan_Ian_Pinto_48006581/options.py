@@ -9,9 +9,6 @@ Returns:
 import argparse
 import os
 
-# import torch
-
-from utils import NUM_TRAINING_ITERATIONS
 from constants import WEIGHTS_DIR, OUTPUT_DIR
 
 

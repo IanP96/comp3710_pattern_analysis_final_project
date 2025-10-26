@@ -24,22 +24,14 @@ import logging
 import numpy as np
 from numpy.typing import NDArray
 import torch
+import matplotlib.pyplot as plt
+
+from constants import MPR_RANGE, SPREAD_RANGE
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-DATA_DIR = "data"
-ORDERBOOK_DATA_FILENAME = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
-
-# 
-NUM_TRAINING_ITERATIONS = 3
-
-if NUM_TRAINING_ITERATIONS < 1_000:
-    logger.warning(
-        "Number of training iterations is set to a low value of %s for testing purposes.",
-        NUM_TRAINING_ITERATIONS,
-    )
 
 # Device configuration
 # source: https://edstem.org/au/courses/26755/discussion/2844412?answer=6302304
@@ -54,50 +46,6 @@ else:
     logger.warning("CUDA and MPS not found. Using CPU")
     TORCH_DEVICE_NAME = "cpu"
 TORCH_DEVICE = torch.device(TORCH_DEVICE_NAME)
-
-
-def train_test_divide(data_x, data_x_hat, data_t, data_t_hat, train_rate=0.8):
-    """Divide train and test data for both original and synthetic data.
-
-    Args:
-      - data_x: original data
-      - data_x_hat: generated data
-      - data_t: original time
-      - data_t_hat: generated time
-      - train_rate: ratio of training data from the original data
-    """
-    # Divide train/test index (original data)
-    no = len(data_x)
-    idx = np.random.permutation(no)
-    train_idx = idx[: int(no * train_rate)]
-    test_idx = idx[int(no * train_rate) :]
-
-    train_x = [data_x[i] for i in train_idx]
-    test_x = [data_x[i] for i in test_idx]
-    train_t = [data_t[i] for i in train_idx]
-    test_t = [data_t[i] for i in test_idx]
-
-    # Divide train/test index (synthetic data)
-    no = len(data_x_hat)
-    idx = np.random.permutation(no)
-    train_idx = idx[: int(no * train_rate)]
-    test_idx = idx[int(no * train_rate) :]
-
-    train_x_hat = [data_x_hat[i] for i in train_idx]
-    test_x_hat = [data_x_hat[i] for i in test_idx]
-    train_t_hat = [data_t_hat[i] for i in train_idx]
-    test_t_hat = [data_t_hat[i] for i in test_idx]
-
-    return (
-        train_x,
-        train_x_hat,
-        test_x,
-        test_x_hat,
-        train_t,
-        train_t_hat,
-        test_t,
-        test_t_hat,
-    )
 
 
 def extract_time(data: NDArray) -> tuple[NDArray[np.int32], NDArray[np.int32]]:
@@ -122,8 +70,7 @@ def extract_time(data: NDArray) -> tuple[NDArray[np.int32], NDArray[np.int32]]:
 def random_generator(
     batch_size: int,
     z_dim: int,
-    T_mb,
-    max_seq_len,
+    seq_len: int,
     mean: float | None = None,
     std: float | None = None,
 ) -> NDArray[np.float64]:
@@ -140,8 +87,7 @@ def random_generator(
     """
     Z_mb = list()
     for i in range(batch_size):
-        temp = np.zeros([max_seq_len, z_dim])
-        noise_shape = (T_mb[i], z_dim)
+        noise_shape = (seq_len, z_dim)
         if mean is None and std is None:
             temp_Z = np.random.uniform(0.0, 1, noise_shape)
         else:
@@ -152,7 +98,6 @@ def random_generator(
             temp_Z = np.random.uniform(
                 mean - interval_size / 2, mean + interval_size / 2, noise_shape
             )
-        temp[: T_mb[i], :] = temp_Z
         Z_mb.append(temp_Z)
     Z_mb_np = np.array(Z_mb)
     return Z_mb_np
@@ -161,7 +106,7 @@ def random_generator(
 def norm_min_max(
     data: NDArray[np.float32],
 ) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
-    """Min-Max Normaliser.
+    """Min-Max Normaliser. Normalises based on feature-wise min and max values.
 
     Args:
       - data: raw data
@@ -171,10 +116,63 @@ def norm_min_max(
       - min_val: minimum values (for renormalisation)
       - max_val: maximum values (for renormalisation)
     """
-    min_val = np.min(np.min(data, axis=0), axis=0)
+    # todo delete old code once verified
+    min_val_old = np.min(np.min(data, axis=0), axis=0)
+    min_val = np.min(data, axis=(0, 1))
+    assert np.all(min_val == min_val_old)
     data = data - min_val  # [3661, 24, 6]
 
-    max_val = np.max(np.max(data, axis=0), axis=0)
+    max_val_old = np.max(np.max(data, axis=0), axis=0)
+    max_val = np.max(data, axis=(0, 1))
+    assert np.all(max_val == max_val_old)
     norm_data = data / (max_val + 1e-7)
 
     return norm_data, min_val, max_val
+
+
+def kl_metric(
+    original_data: NDArray, generated_data: NDArray, metric_type: str, show_plot: bool = False
+) -> float:
+
+    # best ask is feature 0, best bid is feature 2
+
+    assert (
+        len(original_data.shape) == len(generated_data.shape) == 2
+    ), "data should be 2D"
+    assert metric_type in {"spread", "mpr"}
+
+    real_and_generated = []
+    bins = None
+    for data in [original_data, generated_data]:
+        source_data: NDArray
+        bin_range: tuple[float, float]
+        if metric_type == "mpr":
+            mid = 0.5 * (data[:, 2] + data[:, 0])
+            source_data = np.log(mid[1:]) - np.log(mid[:-1])
+            bin_range = MPR_RANGE
+        else:
+            source_data = data[:, 0] - data[:, 2]  # spread
+            bin_range = SPREAD_RANGE
+        assert len(source_data.shape) == 1
+        hist_values, bins = np.histogram(
+            source_data, bins=100, density=True, range=bin_range
+        )
+        real_and_generated.append(hist_values)
+    assert bins is not None
+    dx = bins[1] - bins[0]
+    real = real_and_generated[0]
+    generated = real_and_generated[1]
+    mask = (real > 0) & (generated > 0)
+    real = real[mask]
+    generated = generated[mask]
+    bins = bins[:-1][mask]
+    if show_plot:
+        plt.plot(bins, real, label="real")
+        plt.plot(bins, generated, label="generated")
+        plt.title(f"KL Divergence {metric_type} histograms")
+        plt.legend()
+        plt.show()
+    kl_divergence = np.sum(real * np.log(real / generated)).item() * dx
+    assert isinstance(kl_divergence, float)
+    assert kl_divergence > -1e-6, "KL Divergence should be non-negative"
+    return kl_divergence

@@ -42,10 +42,10 @@ def train():
     command_line_options = Options().parse()
 
     # Load data
-    original_data = load_data(command_line_options)
+    original_data, validate_data, test_data = load_data(command_line_options)
 
     # Load model
-    model = TimeGAN(command_line_options, original_data)
+    model = TimeGAN(command_line_options, original_data, validate_data, test_data)
 
     # Train model
     model.train_and_generate()
