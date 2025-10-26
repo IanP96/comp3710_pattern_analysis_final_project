@@ -12,8 +12,8 @@ Train a generative time-series model such as TimeGAN to generate synthetic seque
 book (LOB) events using the [LOBSTER dataset](https://lobsterdata.com/info/DataSamples.php) (Use AMZN level 10 data). Evaluate on a held-out test
 split using the following metrics:
 
-- **Distribution similarity**: KL divergence ≤0.1 between the generated and real spread and midprice
-return distributions.
+- **Distribution similarity**: KL divergence ≤ 0.1 between the generated and real spread and
+  midprice return distributions.
 - **Visual similarity**: SSIM > 0.6 between heatmaps of generated vs real LOB depth snapshots.
 
 In your report, include model architecture and parameter count, training strategy (full vs variants such
