@@ -50,15 +50,17 @@ import os
 import logging
 import random
 from pathlib import Path
+from argparse import Namespace
 
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.optim as optim
 import numpy as np
+from numpy.typing import NDArray
 
 from dataset import batch_generator
-from utils import extract_time, random_generator, NormMinMax, TORCH_DEVICE
+from utils import extract_time, random_generator, norm_min_max, TORCH_DEVICE
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -264,14 +266,15 @@ class TimeGAN:
         np.random.seed(seed_value)
         torch.backends.cudnn.deterministic = True
 
-    def __init__(self, opt, ori_data):
+    def __init__(self, opt: Namespace, ori_data: NDArray[np.float32]):
 
         # Seed for deterministic behavior
         self.seed(opt.manualseed)
 
         # Initalise variables
         self.opt = opt
-        self.ori_data, self.min_val, self.max_val = NormMinMax(ori_data)
+        self.ori_data, self.min_val, self.max_val = norm_min_max(ori_data)
+        logger.debug("From normalising, got min_val: %s, max_val: %s", self.min_val, self.max_val)
         self.ori_time, self.max_seq_len = extract_time(self.ori_data)
         self.data_num, _, _ = np.asarray(ori_data).shape  # 3661; 24; 6
         self.trn_dir = os.path.join(self.opt.outf, self.opt.name, "train")
@@ -385,7 +388,7 @@ class TimeGAN:
         self.err_er = self.l_mse(self.X_tilde, self.X)
         self.err_er.backward(retain_graph=True)
         # print("Loss: ", self.err_er)
-        logger.debug("Loss in backward_er method: %s", self.err_er)
+        logger.debug("Loss ER: %s", self.err_er.item())
 
     def backward_er_(self):
         """Backpropagate through netE"""
@@ -418,13 +421,13 @@ class TimeGAN:
             + torch.sqrt(self.err_s)
         )
         self.err_g.backward(retain_graph=True)
-        logger.debug("Loss G: %s", self.err_g)
+        logger.debug("Loss G: %s", self.err_g.item())
 
     def backward_s(self):
         """Backpropagate through netS"""
         self.err_s = self.l_mse(self.H[:, 1:, :], self.H_supervise[:, :-1, :])
         self.err_s.backward(retain_graph=True)
-        logger.debug("Loss S: %s", self.err_s)
+        logger.debug("Loss S: %s", self.err_s.item())
         # print(torch.autograd.grad(self.err_s, self.nets.parameters()))
 
     def backward_d(self):
@@ -438,6 +441,7 @@ class TimeGAN:
         if self.err_d > 0.15:
             self.err_d.backward(retain_graph=True)
         # print("Loss D: ", self.err_d)
+        logger.debug("Loss D: %s", self.err_d.item())
 
     def optimize_params_er(self):
         """Forwardpass, Loss Computation and Backwardpass."""
@@ -639,31 +643,20 @@ class TimeGAN:
         for iter in range(self.opt.iteration):
             # Train for one iter
             self.train_one_iter_er()
-
-            # print("Encoder training step: " + str(iter) + "/" + str(self.opt.iteration))
-            logger.info("Encoder training step: %s/%s", iter, self.opt.iteration)
+            logger.info("Encoder training step: %s/%s", iter + 1, self.opt.iteration)
 
         for iter in range(self.opt.iteration):
             # Train for one iter
             self.train_one_iter_s()
-
-            # print(
-            #     "Superviser training step: " + str(iter) + "/" + str(self.opt.iteration)
-            # )
-            logger.debug("Superviser training step: %s/%s", iter, self.opt.iteration)
+            logger.debug("Superviser training step: %s/%s", iter + 1, self.opt.iteration)
 
         for iter in range(self.opt.iteration):
             # Train for one iter
             for kk in range(2):
                 self.train_one_iter_g()
                 self.train_one_iter_er_()
-
             self.train_one_iter_d()
-
-            # print(
-            #     "Superviser training step: " + str(iter) + "/" + str(self.opt.iteration)
-            # )
-            logger.debug("Superviser training step: %s/%s", iter, self.opt.iteration)
+            logger.debug("Superviser training step: %s/%s", iter + 1, self.opt.iteration)
 
         self.save_weights(self.opt.iteration)
         self.generated_data = self.generation(self.opt.batch_size)

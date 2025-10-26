@@ -22,6 +22,7 @@ utils.py
 import logging
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 
 logging.basicConfig()
@@ -32,7 +33,7 @@ DATA_DIR = "data"
 ORDERBOOK_DATA_FILENAME = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
 
 # NUM_TRAINING_ITERATIONS = 50_000
-NUM_TRAINING_ITERATIONS = 50
+NUM_TRAINING_ITERATIONS = 5
 
 if NUM_TRAINING_ITERATIONS < 1_000:
     logger.warning(
@@ -99,7 +100,7 @@ def train_test_divide(data_x, data_x_hat, data_t, data_t_hat, train_rate=0.8):
     )
 
 
-def extract_time(data):
+def extract_time(data: NDArray) -> tuple[NDArray[np.int32], NDArray[np.int32]]:
     """Returns Maximum sequence length and each sequence length.
 
     Args:
@@ -109,16 +110,23 @@ def extract_time(data):
       - time: extracted time information
       - max_seq_len: maximum sequence length
     """
-    time = list()
-    max_seq_len = 0
-    for i in range(len(data)):
-        max_seq_len = max(max_seq_len, len(data[i][:, 0]))
-        time.append(len(data[i][:, 0]))
+    # Get lengths of each sequence (num of timesteps)
+    time = np.array([d.shape[0] for d in data])
+
+    # Get the maximum sequence length
+    max_seq_len = time.max()
 
     return time, max_seq_len
 
 
-def random_generator(batch_size: int, z_dim: int, T_mb, max_seq_len):
+def random_generator(
+    batch_size: int,
+    z_dim: int,
+    T_mb,
+    max_seq_len,
+    mean: float | None = None,
+    std: float | None = None,
+) -> NDArray[np.float64]:
     """Random vector generation.
 
     Args:
@@ -133,22 +141,35 @@ def random_generator(batch_size: int, z_dim: int, T_mb, max_seq_len):
     Z_mb = list()
     for i in range(batch_size):
         temp = np.zeros([max_seq_len, z_dim])
-        temp_Z = np.random.uniform(0.0, 1, [T_mb[i], z_dim])
+        noise_shape = (T_mb[i], z_dim)
+        if mean is None and std is None:
+            temp_Z = np.random.uniform(0.0, 1, noise_shape)
+        else:
+            assert mean is not None and std is not None
+            # todo try using normal distribution as well
+            # using formula for st dev of uniform distribution
+            interval_size = std * (12**0.5)
+            temp_Z = np.random.uniform(
+                mean - interval_size / 2, mean + interval_size / 2, noise_shape
+            )
         temp[: T_mb[i], :] = temp_Z
         Z_mb.append(temp_Z)
-    return Z_mb
+    Z_mb_np = np.array(Z_mb)
+    return Z_mb_np
 
 
-def NormMinMax(data):
-    """Min-Max Normalizer.
+def norm_min_max(
+    data: NDArray[np.float32],
+) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
+    """Min-Max Normaliser.
 
     Args:
       - data: raw data
 
     Returns:
-      - norm_data: normalized data
-      - min_val: minimum values (for renormalization)
-      - max_val: maximum values (for renormalization)
+      - norm_data: normalised data
+      - min_val: minimum values (for renormalisation)
+      - max_val: maximum values (for renormalisation)
     """
     min_val = np.min(np.min(data, axis=0), axis=0)
     data = data - min_val  # [3661, 24, 6]

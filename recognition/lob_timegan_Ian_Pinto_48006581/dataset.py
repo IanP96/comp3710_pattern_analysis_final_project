@@ -32,6 +32,7 @@ from argparse import Namespace
 
 # from os.path import dirname, abspath
 import numpy as np
+from numpy.typing import NDArray
 
 from utils import DATA_DIR, ORDERBOOK_DATA_FILENAME
 
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def MinMaxScaler(data):
+def min_max_scaler(data: NDArray[np.float32]) -> NDArray[np.float32]:
     """Min Max normalizer.
 
     Args:
@@ -93,20 +94,7 @@ def sine_data_generation(no, seq_len, dim):
     return data
 
 
-def real_data_loading(seq_len):
-    """Load and preprocess real-world datasets.
-
-    Args:
-      - seq_len: sequence length
-
-    Returns:
-      - data: preprocessed data.
-    """
-
-    pass
-
-
-def load_data(opt: Namespace):
+def load_data(opt: Namespace) -> NDArray[np.float32]:
     """
     Load and preprocess stock data
 
@@ -114,44 +102,61 @@ def load_data(opt: Namespace):
         opt (Options): command-line options. opt.seq_len should be the sequence length for slicing
 
     Returns:
-        preprocessed data
+        preprocessed data of shape (num_batches, seq_len, num_features)
     """
     # todo update docstring
 
     logger.info("Loading and preprocessing stock dataset...")
-    
+
     # Data loading
     seq_len = opt.seq_len
 
     original_data = np.loadtxt(
-        Path("data", ORDERBOOK_DATA_FILENAME), delimiter=",", skiprows=0
+        Path("data", ORDERBOOK_DATA_FILENAME), delimiter=",", skiprows=0, dtype=np.int64
     )
 
     # If the data is in reverse chronological data (the LOBSTER data isn't), flip the data to make
     # chronological data
     # original_data = original_data[::-1]
 
-    # Normalise the data
-    original_data = MinMaxScaler(original_data)
+    # From the README about the LOBSTER data:
+    # ---
+    # Unoccupied Price Levels:
+    # When the selected number of levels exceeds the number of levels
+    # available the empty order book positions are filled with dummy
+    # information to guarantee a symmetric output. The extra bid
+    # and/or ask prices are set to -9999999999 and 9999999999,
+    # respectively. The Corresponding volumes are set to 0.
+    # ---
+    # So remove any rows where this applies
+    filtered_data = np.array([row for row in original_data if 0 not in row])
 
-    # Preprocess the dataset
-    temp_data = []
+    filtered_data_float = filtered_data.astype("float32")
+
+    # Normalise the data
+    filtered_data_float = min_max_scaler(filtered_data_float)
+
+    # Get dimensions
+    n_samples = filtered_data_float.shape[0]
+    n_features = filtered_data_float.shape[1]
+    n_batches = n_samples - seq_len + 1
+
     # Cut data by sequence length
-    for i in range(0, len(original_data) - seq_len):
-        data_slice = original_data[i : i + seq_len]
-        temp_data.append(data_slice)
+    sliced_data = np.empty((n_batches, seq_len, n_features), dtype=np.float32)
+    for i in range(0, len(filtered_data_float) - seq_len + 1):
+        data_slice = filtered_data_float[i : i + seq_len]
+        sliced_data[i] = data_slice
 
     # Mix the datasets (to make it similar to i.i.d)
-    idx = np.random.permutation(len(temp_data))
-    data = []
-    for i in range(len(temp_data)):
-        data.append(temp_data[idx[i]])
+    np.random.shuffle(sliced_data)
 
-    logger.info("Stock dataset has been loaded.")
-    return data  # list: 3661; [24,6]
+    logger.info("Stock dataset has been loaded and preprocessed.")
+    return sliced_data
 
 
-def batch_generator(data, time, batch_size):
+def batch_generator(
+    data: NDArray[np.float32], time: NDArray[np.int32], batch_size: int
+) -> tuple[NDArray[np.float32], NDArray[np.int32]]:
     """Mini-batch generator.
 
     Args:
@@ -167,7 +172,7 @@ def batch_generator(data, time, batch_size):
     idx = np.random.permutation(no)
     train_idx = idx[:batch_size]
 
-    X_mb = list(data[i] for i in train_idx)
-    T_mb = list(time[i] for i in train_idx)
+    X_mb = np.array([data[i] for i in train_idx], dtype=np.float32)
+    T_mb = np.array([time[i] for i in train_idx], dtype=np.int32)
 
     return X_mb, T_mb
