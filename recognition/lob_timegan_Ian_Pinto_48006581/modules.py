@@ -742,7 +742,7 @@ class TimeGAN:
         self.generated_data = self.generation(
             self.opt.batch_size, self.test_max_val, self.test_min_val
         )
-        GENERATED_DATA_PATH = Path("generated_data.npy")
+        GENERATED_DATA_PATH = Path(OUTPUT_DIR, "generated_data.npy")
         np.save(GENERATED_DATA_PATH, self.generated_data)
         logger.info(
             "Finished synthetic data generation and written synthetic data to %s",
