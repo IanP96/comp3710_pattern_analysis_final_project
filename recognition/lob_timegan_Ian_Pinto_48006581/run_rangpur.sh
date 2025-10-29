@@ -9,5 +9,7 @@
 #SBATCH --partition=a100
 #SBATCH --job-name=final_proj
 
+conda init
 conda activate comp3710
 python train.py --env rangpur > output/stdout.txt 2> output/stderr.txt
+python predict.py --env rangpur

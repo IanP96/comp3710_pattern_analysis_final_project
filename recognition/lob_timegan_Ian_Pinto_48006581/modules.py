@@ -282,7 +282,7 @@ class TimeGAN:
         ori_data: NDArray[np.float32],
         validate_data: NDArray[np.float32],
         test_data: NDArray[np.float32],
-        resume=True,
+        load_weights=False,
     ):
 
         # Seed for deterministic behavior
@@ -335,7 +335,7 @@ class TimeGAN:
             raise ValueError(f"Unknown environment: {self.opt.env}")
 
         weights_path = Path(OUTPUT_DIR, WEIGHTS_DIR)
-        if resume and weights_path.exists():
+        if load_weights and weights_path.exists():
             # assert weights_path.exists(), f"Weights path {weights_path} does not exist."
             logger.info(
                 "Loading pre-trained networks from directory: %s ...", weights_path
@@ -557,12 +557,8 @@ class TimeGAN:
         self.backward_d()
         self.optimizer_d.step()
 
-    def save_weights(self, epoch):
-        """Save net weights for the current epoch.
-
-        Args:
-            epoch ([int]): Current epoch number.
-        """
+    def save_weights(self):
+        """Save network weights."""
 
         weight_dir = Path(OUTPUT_DIR, WEIGHTS_DIR)
         logger.info("Saving network weights to directory: %s ...", weight_dir)
@@ -570,26 +566,47 @@ class TimeGAN:
             weight_dir.mkdir(parents=True, exist_ok=True)
             logger.debug("Created directory to save weights.")
 
+        # torch.save(
+        #     {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
+        #     Path(weight_dir, "netE.pth"),
+        # )
+        # torch.save(
+        #     {"epoch": epoch + 1, "state_dict": self.netr.state_dict()},
+        #     Path(weight_dir, "netR.pth"),
+        # )
+        # torch.save(
+        #     {"epoch": epoch + 1, "state_dict": self.netg.state_dict()},
+        #     Path(weight_dir, "netG.pth"),
+        # )
+        # torch.save(
+        #     {"epoch": epoch + 1, "state_dict": self.netd.state_dict()},
+        #     Path(weight_dir, "netD.pth"),
+        # )
+        # torch.save(
+        #     {"epoch": epoch + 1, "state_dict": self.nets.state_dict()},
+        #     Path(weight_dir, "netS.pth"),
+        # )
         torch.save(
-            {"epoch": epoch + 1, "state_dict": self.nete.state_dict()},
+            {"state_dict": self.nete.state_dict()},
             Path(weight_dir, "netE.pth"),
         )
         torch.save(
-            {"epoch": epoch + 1, "state_dict": self.netr.state_dict()},
+            {"state_dict": self.netr.state_dict()},
             Path(weight_dir, "netR.pth"),
         )
         torch.save(
-            {"epoch": epoch + 1, "state_dict": self.netg.state_dict()},
+            {"state_dict": self.netg.state_dict()},
             Path(weight_dir, "netG.pth"),
         )
         torch.save(
-            {"epoch": epoch + 1, "state_dict": self.netd.state_dict()},
+            {"state_dict": self.netd.state_dict()},
             Path(weight_dir, "netD.pth"),
         )
         torch.save(
-            {"epoch": epoch + 1, "state_dict": self.nets.state_dict()},
+            {"state_dict": self.nets.state_dict()},
             Path(weight_dir, "netS.pth"),
         )
+        logger.info("Weights saved.")
 
     def train_one_iter_er(self):
         """Train the model for one epoch."""
@@ -650,9 +667,7 @@ class TimeGAN:
             self.ori_data, self.ori_time, self.opt.batch_size
         )
         self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-        self.Z = random_generator(
-            self.opt.batch_size, self.opt.z_dim, self.opt.seq_len
-        )
+        self.Z = random_generator(self.opt.batch_size, self.opt.z_dim, self.opt.seq_len)
 
         # train supervisor
         self.optimize_params_g()
@@ -672,16 +687,14 @@ class TimeGAN:
             self.ori_data, self.ori_time, self.opt.batch_size
         )
         self.X = torch.tensor(self.X0, dtype=torch.float32).to(self.device)
-        self.Z = random_generator(
-            self.opt.batch_size, self.opt.z_dim, self.opt.seq_len
-        )
+        self.Z = random_generator(self.opt.batch_size, self.opt.z_dim, self.opt.seq_len)
 
         # train supervisor
         self.optimize_params_d()
 
     def train_and_generate(self):
         """Train the model and generate some synthetic data"""
-        
+
         logger.info("Starting training ...")
 
         for iter in range(self.num_iterations):
@@ -723,21 +736,27 @@ class TimeGAN:
                     logger.exception("KL metric computation failed, got error:")
                     continue
                 logger.info(
-                    "Metrics: KL Spread: %s, KL mid-price return: %s", kl_spread, kl_mpr
+                    "KL Spread: %s, KL mid-price return: %s", kl_spread, kl_mpr
                 )
+                # todo add ask > bid as metric
                 if kl_spread > last_kl_spread or kl_mpr > last_kl_mpr:
                     increase_count += 1
                 else:
                     increase_count = 0
                 last_kl_spread = kl_spread
                 last_kl_mpr = kl_mpr
+
                 # if increase_count >= 3:
                 #     logger.info("Early stopping at iteration %s", iter)
                 #     break
 
+                self.save_weights()
+
         logger.info("Training finished.")
-        
-        self.save_weights(self.num_iterations)
+
+        self.save_weights()
+
+    def run_inference(self):
         self.generated_data = self.generation(
             self.opt.batch_size, self.test_max_val, self.test_min_val
         )
