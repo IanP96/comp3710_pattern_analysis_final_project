@@ -50,7 +50,6 @@ import logging
 import random
 from pathlib import Path
 from argparse import Namespace
-from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -70,7 +69,11 @@ from constants import (
     LOCAL_VALIDATE_INTERVAL,
 )
 
-logging.basicConfig()
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -679,9 +682,7 @@ class TimeGAN:
     def train_and_generate(self):
         """Train the model and generate some synthetic data"""
         
-        now = datetime.now()
-        formatted_datetime = now.strftime("%B %d, %Y %I:%M%p")
-        logger.info("Model training started at %s ...", formatted_datetime)
+        logger.info("Starting training ...")
 
         for iter in range(self.num_iterations):
             # Train for one iter
@@ -734,9 +735,7 @@ class TimeGAN:
                 #     logger.info("Early stopping at iteration %s", iter)
                 #     break
 
-        now = datetime.now()
-        formatted_datetime = now.strftime("%B %d, %Y %I:%M%p")
-        logger.info("Training finished at %s.", formatted_datetime)
+        logger.info("Training finished.")
         
         self.save_weights(self.num_iterations)
         self.generated_data = self.generation(

@@ -36,7 +36,11 @@ from numpy.typing import NDArray
 
 from constants import TRAIN_TEST_VALIDATE, DATA_DIR, ORDERBOOK_DATA_FILENAME
 
-logging.basicConfig()
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -56,7 +60,9 @@ def min_max_scaler(data: NDArray[np.float32]) -> NDArray[np.float32]:
     return norm_data
 
 
-def load_data(opt: Namespace) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
+def load_data(
+    opt: Namespace,
+) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
     """
     Load and preprocess stock data
 
