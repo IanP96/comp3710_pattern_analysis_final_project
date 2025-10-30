@@ -13,3 +13,5 @@ opt.txt
 
 # VSCode
 .vscode
+
+*.png
