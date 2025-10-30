@@ -145,6 +145,7 @@ def kl_metric(
     ), "data should be 2D"
     assert metric_type in {"spread", "mpr"}
 
+    # Calculate relevant data from input stock data (spread or midprice return)
     real_and_generated_hist_values = []
     real_generated_source_data = []
     bins = None
@@ -158,44 +159,55 @@ def kl_metric(
             source_data = data[:, 0] - data[:, 2]  # spread
         assert len(source_data.shape) == 1
         real_generated_source_data.append(source_data)
-        
+
     bin_range = (
         min([np.min(d) for d in real_generated_source_data]),
         max([np.max(d) for d in real_generated_source_data]),
     )
-        
+
     for source_data in real_generated_source_data:
         hist_values, bins = np.histogram(
             source_data, bins=100, density=True, range=bin_range
         )
         real_and_generated_hist_values.append(hist_values)
-        
+
     assert bins is not None
     dx = bins[1] - bins[0]
     real = real_and_generated_hist_values[0]
     generated = real_and_generated_hist_values[1]
-    
-    mask_remove = (generated > 0)
+
+    # Remove entries where bin value for generated data = 0 (can't properly calculate KL divergence)
+    mask_remove = generated > 0
     bins = bins[:-1][mask_remove]
     real = real[mask_remove]
     generated = generated[mask_remove]
+
     logger.debug("len(real)=%d, len(generated)=%d", len(real), len(generated))
+
+    # Renormalise
     real = real / np.sum(real)
     generated = generated / np.sum(generated)
+
     if show_plot:
         plt.plot(bins, real, label="real")
         plt.plot(bins, generated, label="generated")
         plt.title(f"KL Divergence {metric_type} histograms")
         plt.legend()
         plt.show()
+
+    # Calculate terms to sum for KL divergence
     terms = np.zeros_like(real)
-    zero_mask = (real < 1e-6)
+    zero_mask = real < 1e-6
     logger.debug("real=%s", real)
     logger.debug("generated=%s", generated)
     logger.debug("real[~zero_mask]=%s", real[~zero_mask])
     logger.debug("generated[~zero_mask]=%s", generated[~zero_mask])
-    terms[~zero_mask] = real[~zero_mask] * np.log(real[~zero_mask] / generated[~zero_mask])
-    terms[zero_mask] = 0.0 # lim x->0 of  (x log(x/y)) = 0
+    terms[~zero_mask] = real[~zero_mask] * np.log(
+        real[~zero_mask] / generated[~zero_mask]
+    )
+    terms[zero_mask] = 0.0  # lim x->0 of  (x log(x/y)) = 0
+
+    # Calculate KL divergence
     kl_divergence = np.sum(terms).item() * dx
     assert isinstance(kl_divergence, float)
     assert (
