@@ -1,4 +1,4 @@
-numpy
-torch
-matplotlib
-scikit-image
+numpy>=2.1.2
+torch>=2.7.1
+matplotlib>=3.10.6
+scikit-image>=0.25.2
