@@ -26,11 +26,8 @@ from numpy.typing import NDArray
 import torch
 import matplotlib.pyplot as plt
 
-from constants import MPR_RANGE, SPREAD_RANGE
-
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
-    level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
@@ -148,7 +145,8 @@ def kl_metric(
     ), "data should be 2D"
     assert metric_type in {"spread", "mpr"}
 
-    real_and_generated = []
+    real_and_generated_hist_values = []
+    real_generated_source_data = []
     bins = None
     for data in [original_data, generated_data]:
         source_data: NDArray
@@ -156,32 +154,49 @@ def kl_metric(
         if metric_type == "mpr":
             mid = 0.5 * (data[:, 2] + data[:, 0])
             source_data = np.log(mid[1:]) - np.log(mid[:-1])
-            bin_range = MPR_RANGE
         else:
             source_data = data[:, 0] - data[:, 2]  # spread
-            bin_range = SPREAD_RANGE
         assert len(source_data.shape) == 1
+        real_generated_source_data.append(source_data)
+        
+    bin_range = (
+        min([np.min(d) for d in real_generated_source_data]),
+        max([np.max(d) for d in real_generated_source_data]),
+    )
+        
+    for source_data in real_generated_source_data:
         hist_values, bins = np.histogram(
             source_data, bins=100, density=True, range=bin_range
         )
-        hist_values += 1e-12  # avoid zero values
-        hist_values = hist_values / np.sum(hist_values)  # normalise
-        real_and_generated.append(hist_values)
+        real_and_generated_hist_values.append(hist_values)
+        
     assert bins is not None
     dx = bins[1] - bins[0]
-    real = real_and_generated[0]
-    generated = real_and_generated[1]
-    mask = (real > 0) & (generated > 0)
-    real = real[mask]
-    generated = generated[mask]
-    bins = bins[:-1][mask]
+    real = real_and_generated_hist_values[0]
+    generated = real_and_generated_hist_values[1]
+    
+    mask_remove = (generated > 0)
+    bins = bins[:-1][mask_remove]
+    real = real[mask_remove]
+    generated = generated[mask_remove]
+    logger.debug("len(real)=%d, len(generated)=%d", len(real), len(generated))
+    real = real / np.sum(real)
+    generated = generated / np.sum(generated)
     if show_plot:
         plt.plot(bins, real, label="real")
         plt.plot(bins, generated, label="generated")
         plt.title(f"KL Divergence {metric_type} histograms")
         plt.legend()
         plt.show()
-    kl_divergence = np.sum(real * np.log(real / generated)).item() * dx
+    terms = np.zeros_like(real)
+    zero_mask = (real < 1e-6)
+    logger.debug("real=%s", real)
+    logger.debug("generated=%s", generated)
+    logger.debug("real[~zero_mask]=%s", real[~zero_mask])
+    logger.debug("generated[~zero_mask]=%s", generated[~zero_mask])
+    terms[~zero_mask] = real[~zero_mask] * np.log(real[~zero_mask] / generated[~zero_mask])
+    terms[zero_mask] = 0.0 # lim x->0 of  (x log(x/y)) = 0
+    kl_divergence = np.sum(terms).item() * dx
     assert isinstance(kl_divergence, float)
     assert (
         kl_divergence > -1e-6

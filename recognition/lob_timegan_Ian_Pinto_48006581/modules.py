@@ -71,7 +71,6 @@ from constants import (
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
-    level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
@@ -758,7 +757,7 @@ class TimeGAN:
 
     def run_inference(self):
         self.generated_data = self.generation(
-            self.opt.batch_size, self.test_max_val, self.test_min_val
+            len(self.test_data), self.test_max_val, self.test_min_val
         )
         GENERATED_DATA_PATH = Path(OUTPUT_DIR, "generated_data.npy")
         np.save(GENERATED_DATA_PATH, self.generated_data)
