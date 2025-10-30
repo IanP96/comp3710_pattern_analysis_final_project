@@ -58,7 +58,7 @@ import torch.optim as optim
 import numpy as np
 from numpy.typing import NDArray
 
-from dataset import batch_generator
+from dataset import batch_generator, load_data
 from utils import extract_time, random_generator, norm_min_max, TORCH_DEVICE, kl_metric
 from constants import (
     WEIGHTS_DIR,
@@ -68,6 +68,7 @@ from constants import (
     RANGPUR_VALIDATE_INTERVAL,
     LOCAL_VALIDATE_INTERVAL,
 )
+from options import Options
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -803,3 +804,25 @@ class TimeGAN:
         # Reshape to 2D
         generated_data_2d = generated_data.reshape(-1, generated_data.shape[2])
         return generated_data_2d
+
+    def print_parameter_count(self) -> None:
+        sub_models = {
+            "Embedder": self.nete,
+            "Recovery": self.netr,
+            "Generator": self.netg,
+            "Supervisor": self.nets,
+            "Discriminator": self.netd,
+        }
+        for model_name, model in sub_models.items():
+            total = sum(p.numel() for p in model.parameters())
+            total_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            print(f"Parameters for {model_name}:")
+            print(f"Total parameter count: {total}")
+            print(f"Total trainable parameter count: {total_trainable}")
+
+if __name__ == "__main__":
+    # Print model parameter count
+    command_line_options = Options().parse()
+    original_data, validate_data, test_data = load_data(command_line_options)
+    model = TimeGAN(command_line_options, original_data, validate_data, test_data)
+    model.print_parameter_count()

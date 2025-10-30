@@ -78,8 +78,12 @@ def load_data(
     # Data loading
     seq_len = opt.seq_len
 
+    orderbook_data_path = Path(DATA_DIR, ORDERBOOK_DATA_FILENAME)
+    if not orderbook_data_path.exists():
+        msg = f"{orderbook_data_path} not found. Download the AMZN level 10 orderbook data from https://lobsterdata.com/info/sample/LOBSTER_SampleFile_AMZN_2012-06-21_10.zip and place the AMZN_2012-06-21_34200000_57600000_orderbook_10 file in the data directory."
+        raise FileNotFoundError(msg)
     raw_data = np.loadtxt(
-        Path(DATA_DIR, ORDERBOOK_DATA_FILENAME),
+        orderbook_data_path,
         delimiter=",",
         skiprows=0,
         dtype=np.int64,
