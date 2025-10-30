@@ -8,8 +8,8 @@ OUTPUT_DIR = "output"
 WEIGHTS_DIR = "weights"
 
 # How many training iterations to use (max) on Rangpur
-RANGPUR_NUM_TRAINING_ITERATIONS = 50_000
-RANGPUR_VALIDATE_INTERVAL = 500
+RANGPUR_NUM_TRAINING_ITERATIONS = 30_000
+RANGPUR_VALIDATE_INTERVAL = 300
 
 # How many training iterations to use (max) running locally on laptop
 LOCAL_NUM_TRAINING_ITERATIONS = 4
