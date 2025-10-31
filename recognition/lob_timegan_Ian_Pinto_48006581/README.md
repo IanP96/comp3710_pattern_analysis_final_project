@@ -224,3 +224,4 @@ base volatility. However, I didn't see this with the synthetic data.
 # References
 - [*What Is a Limit Order Book? Definition and Data* by Will Kenton (Investopedia article)](https://www.investopedia.com/terms/l/limitorderbook.asp)
 - [*Time-series Generative Adversarial Networks* by Jinsung Yoon, Daniel Jarrett, Mihaela van der Schaar](https://papers.nips.cc/paper_files/paper/2019/file/c9efe5f26cd17ba6216bbe2a7d26d490-Paper.pdf)
+- [*TimeGAN-pytorch* (GitHub repo) by zwzhang123, robinbg](https://github.com/zwzhang123/TimeGAN-pytorch)
