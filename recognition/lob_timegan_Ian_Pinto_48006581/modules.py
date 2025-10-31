@@ -1,11 +1,5 @@
 """
-Code for model components (classes/functions)
-"""
-
-"""
-MODULE.PY DOCSTRING STARTS HERE
-
-Reimplement TimeGAN-pytorch Codebase.
+Code for TimeGAN and constituent model components (classes/functions)
 
 Reference: Jinsung Yoon, Daniel Jarrett, Mihaela van der Schaar,
 "Time-series Generative Adversarial Networks,"
@@ -13,37 +7,16 @@ Neural Information Processing Systems (NeurIPS), 2019.
 
 Paper link: https://papers.nips.cc/paper/8789-time-series-generative-adversarial-networks
 
-Last updated Date: October 18th 2021
-Code author: Zhiwei Zhang (bitzzw@gmail.com), Biaolin Wen (robinbg@foxmail.com)
+Original code author: Zhiwei Zhang (bitzzw@gmail.com), Biaolin Wen (robinbg@foxmail.com)
+Modified by: Ian Pinto
 
------------------------------
-
-model.py: Network Modules
+Network Modules
 
 (1) Encoder
 (2) Recovery
 (3) Generator
 (4) Supervisor
 (5) Discriminator
-
-TIMEGAN.PY DOCSTRING STARTS HERE
-
-Reimplement TimeGAN-pytorch Codebase.
-
-Reference: Jinsung Yoon, Daniel Jarrett, Mihaela van der Schaar,
-"Time-series Generative Adversarial Networks,"
-Neural Information Processing Systems (NeurIPS), 2019.
-
-Paper link: https://papers.nips.cc/paper/8789-time-series-generative-adversarial-networks
-
-Last updated Date: October 18th 2021
-Code author: Zhiwei Zhang (bitzzw@gmail.com), Biaolin Wen(robinbg@foxmail.com)
-
------------------------------
-
-timegan.py
-
-Note: Use original data as training set to generater synthetic data (time-series)
 """
 
 import logging
@@ -251,7 +224,7 @@ class Discriminator(nn.Module):
 
 
 class TimeGAN:
-    """TimeGAN Class"""
+    """TimeGAN Class. Combines encoder, decoder, supervisor, generator, discriminator"""
 
     @property
     def name(self):
@@ -342,19 +315,29 @@ class TimeGAN:
             )
             # self.opt.iteration = torch.load(Path(weights_path, "netG.pth"))["epoch"]
             self.nete.load_state_dict(
-                torch.load(Path(weights_path, "netE.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netE.pth"), map_location=TORCH_DEVICE)[
+                    "state_dict"
+                ]
             )
             self.netr.load_state_dict(
-                torch.load(Path(weights_path, "netR.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netR.pth"), map_location=TORCH_DEVICE)[
+                    "state_dict"
+                ]
             )
             self.netg.load_state_dict(
-                torch.load(Path(weights_path, "netG.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netG.pth"), map_location=TORCH_DEVICE)[
+                    "state_dict"
+                ]
             )
             self.netd.load_state_dict(
-                torch.load(Path(weights_path, "netD.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netD.pth"), map_location=TORCH_DEVICE)[
+                    "state_dict"
+                ]
             )
             self.nets.load_state_dict(
-                torch.load(Path(weights_path, "netS.pth"))["state_dict"]
+                torch.load(Path(weights_path, "netS.pth"), map_location=TORCH_DEVICE)[
+                    "state_dict"
+                ]
             )
             logger.info("Finished loading pre-trained networks.")
         else:
@@ -735,9 +718,7 @@ class TimeGAN:
                 except AssertionError:
                     logger.exception("KL metric computation failed, got error:")
                     continue
-                logger.info(
-                    "KL Spread: %s, KL mid-price return: %s", kl_spread, kl_mpr
-                )
+                logger.info("KL Spread: %s, KL mid-price return: %s", kl_spread, kl_mpr)
                 # todo add ask > bid as metric
                 if kl_spread > last_kl_spread or kl_mpr > last_kl_mpr:
                     increase_count += 1
@@ -756,16 +737,18 @@ class TimeGAN:
 
         self.save_weights()
 
-    def run_inference(self):
+    def run_inference(self, write=True):
         self.generated_data = self.generation(
             len(self.test_data), self.test_max_val, self.test_min_val
         )
-        GENERATED_DATA_PATH = Path(OUTPUT_DIR, "generated_data.npy")
-        np.save(GENERATED_DATA_PATH, self.generated_data)
-        logger.info(
-            "Finished synthetic data generation and written synthetic data to %s",
-            GENERATED_DATA_PATH,
-        )
+        if write:
+            GENERATED_DATA_PATH = Path(OUTPUT_DIR, "generated_data.npy")
+            np.save(GENERATED_DATA_PATH, self.generated_data)
+            logger.info(
+                "Finished synthetic data generation and written synthetic data to %s",
+                GENERATED_DATA_PATH,
+            )
+        return self.generated_data
 
     def generation(
         self, num_rows: int, max_val: NDArray, min_val: NDArray, mean=0.0, std=1.0
@@ -815,10 +798,13 @@ class TimeGAN:
         }
         for model_name, model in sub_models.items():
             total = sum(p.numel() for p in model.parameters())
-            total_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            total_trainable = sum(
+                p.numel() for p in model.parameters() if p.requires_grad
+            )
             print(f"Parameters for {model_name}:")
             print(f"Total parameter count: {total}")
             print(f"Total trainable parameter count: {total_trainable}")
+
 
 if __name__ == "__main__":
     # Print model parameter count

@@ -1,3 +1,7 @@
+"""
+Code for generating heatmaps from stock data and getting the SSIM metric
+"""
+
 import logging
 from pathlib import Path
 
@@ -10,6 +14,7 @@ from skimage import img_as_float
 from dataset import load_data
 from constants import NUM_LEVELS
 from options import Options
+from modules import TimeGAN
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -40,7 +45,16 @@ def plot_heatmap(
     data: NDArray,
     plot_title: str | None = None,
     plot_save_path: Path | str | None = None,
+    show_plot=True,
 ) -> None:
+    """Plot heatmap of given stock data
+
+    Args:
+        data (NDArray): 2D stock data, real or fake
+        plot_title (str | None, optional): Title of plot, or None for no title. Defaults to None.
+        plot_save_path (Path | str | None, optional): Where to save the plot, or None to avoid saving. Defaults to None.
+        show_plot (bool, optional): True to display the plot, False otherwise. Defaults to True.
+    """
 
     volume_data = data[:, 1:40:2]
     max_volume = np.max(volume_data)
@@ -90,22 +104,46 @@ def plot_heatmap(
         plt.title(plot_title)
     if plot_save_path is not None:
         plt.savefig(plot_save_path)
-    plt.show()
+    if show_plot:
+        plt.show()
 
 
 if __name__ == "__main__":
 
-    # heatmap and SSIM on test data
+    # Arguments
     command_line_options = Options().parse()
-    _, _, test_data = load_data(command_line_options)
-    cutoff = int(len(test_data) / 100)
-    plot_heatmap(
-        test_data[:cutoff], "Heatmap of test LOBSTER data", "test_heatmap.png"
+
+    # Load data
+    original_data, validate_data, test_data = load_data(command_line_options)
+
+    # Load model
+    model = TimeGAN(
+        command_line_options, original_data, validate_data, test_data, load_weights=True
     )
-    plot_heatmap(
-        test_data[:cutoff] + np.random.rand(cutoff, NUM_LEVELS * 4) * 100,
-        "Heatmap of test LOBSTER data plus noise",
-        "test_heatmap_noise.png",
-    )
-    test_data_ssim = get_ssim(Path("test_heatmap.png"), Path("test_heatmap_noise.png"))
-    print(f"{test_data_ssim = }")
+
+    # real heatmap
+    plot_heatmap(test_data, plot_save_path="real_heatmap.png", show_plot=False)
+
+    # fake heatmaps
+    for i in range(3):
+        generated_data = model.run_inference(write=False)
+        filename = f"synthetic_heatmap_{i}.png"
+        plot_heatmap(generated_data, plot_save_path=filename, show_plot=False)
+        test_data_ssim = get_ssim(Path("real_heatmap.png"), filename)
+        print(f"{test_data_ssim = }")
+
+    # heatmap and SSIM on test data
+
+    # command_line_options = Options().parse()
+    # _, _, test_data = load_data(command_line_options)
+    # cutoff = int(len(test_data) / 100)
+    # plot_heatmap(
+    #     test_data[:cutoff], "Heatmap of test LOBSTER data", "test_heatmap.png"
+    # )
+    # plot_heatmap(
+    #     test_data[:cutoff] + np.random.rand(cutoff, NUM_LEVELS * 4) * 100,
+    #     "Heatmap of test LOBSTER data plus noise",
+    #     "test_heatmap_noise.png",
+    # )
+    # test_data_ssim = get_ssim(Path("test_heatmap.png"), Path("test_heatmap_noise.png"))
+    # print(f"{test_data_ssim = }")

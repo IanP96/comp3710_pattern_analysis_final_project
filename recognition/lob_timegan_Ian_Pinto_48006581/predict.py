@@ -1,6 +1,5 @@
 """
-Example usage of your trained model. Print out any results and/or provide visualisations where
-applicable
+Example usage of trained model. Generates and saves synthetic data.
 """
 
 from options import Options

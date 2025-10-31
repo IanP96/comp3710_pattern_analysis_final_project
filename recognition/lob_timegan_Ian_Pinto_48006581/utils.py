@@ -1,4 +1,5 @@
-"""Reimplement TimeGAN-pytorch Codebase.
+"""
+Useful miscellaneous utilities
 
 Reference: Jinsung Yoon, Daniel Jarrett, Mihaela van der Schaar,
 "Time-series Generative Adversarial Networks,"
@@ -6,17 +7,8 @@ Neural Information Processing Systems (NeurIPS), 2019.
 
 Paper link: https://papers.nips.cc/paper/8789-time-series-generative-adversarial-networks
 
-Last updated Date: October 18th 2021
-Code author: Zhiwei Zhang (bitzzw@gmail.com)
-
------------------------------
-
-utils.py
-
-(1) train_test_divide: Divide train and test data for both original and synthetic data.
-(2) extract_time: Returns Maximum sequence length and each sequence length.
-(3) random_generator: random vector generator
-(4) NormMinMax: return data info
+Original code author: Zhiwei Zhang (bitzzw@gmail.com)
+Modified by: Ian Pinto
 """
 
 import logging

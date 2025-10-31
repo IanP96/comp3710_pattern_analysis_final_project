@@ -1,8 +1,5 @@
 """
 Data loading and preprocessing
-"""
-
-"""Reimplement TimeGAN-pytorch Codebase.
 
 Reference: Jinsung Yoon, Daniel Jarrett, Mihaela van der Schaar,
 "Time-series Generative Adversarial Networks,"
@@ -10,8 +7,8 @@ Neural Information Processing Systems (NeurIPS), 2019.
 
 Paper link: https://papers.nips.cc/paper/8789-time-series-generative-adversarial-networks
 
-Last updated Date: October 18th 2021
-Code author: Zhiwei Zhang (bitzzw@gmail.com)
+Original code author: Zhiwei Zhang (bitzzw@gmail.com)
+Modified by: Ian Pinto
 
 -----------------------------
 
