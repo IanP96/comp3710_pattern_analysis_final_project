@@ -152,7 +152,74 @@ There are two types of loss used for training:
 
 ## Training
 
-See `modules.TimeGAN.train_and_save`.
+See `modules.TimeGAN.train_and_save`. The model is trained in full (i.e. both supervised and
+unsupervised training). The training is as follows:
+
+- Train the encoder and decoder together for N interations
+- Train the supervisor for N iterations
+- Train the generator, encoder/decoder and discriminator (unsupervised) for N iterations
+
+# Metrics
+
+## KL divergence of spread
+
+*Spread* is the difference between the best bid and the best ask.
+
+Achieved KL from spread distribution: 80.35599233840904
+
+Target KL from spread distribution: ≤ 0.1
+
+## KL divergence of midprice return
+
+The midprice is the average of the best bid and the best ask, and gives an approximate measure of the value of a
+stock at any point in time.
+
+Achieved KL mid-price return from mid-price return distribution: 9.850393352517815e-05
+
+Target KL mid-price return from mid-price return distribution: ≤ 0.1
+
+## Heatmaps
+
+Heatmaps visualise the distribution of volumes and prices for bids/asks in an order book. For these
+heatmaps, bids are blue (because alliteration) and asks are red.
+
+SSIM (measure of image similarity) was used to compare the heatmaps from the synthetic vs real stock
+data.
+
+Target SSIM: ≥ 0.6
+
+Achieved SSIM: 0.681, 0.678, 0.675
+
+Heatmap of test data:
+
+![Heatmap of test data](media/real_heatmap.png)
+
+Synthetic heatmap 1:
+
+![Synthetic heatmap 1](media/synthetic_heatmap_0.png)
+
+Synthetic heatmap 2:
+
+![Synthetic heatmap 2](media/synthetic_heatmap_1.png)
+
+Synthetic heatmap 3:
+
+![Synthetic heatmap 3](media/synthetic_heatmap_2.png)
+
+# Strengths and weaknesses of synthetic LOB
+
+This TimeGAN model is best at mimicking small windows of the original stock data. However, from my
+testing, it failed to resemble the original data for longer synthetic sequences, i.e. failed to
+resemble long-term patterns.
+
+Volatility is a measure of sharply a stock's price varies over a period of time. Plotting volatility
+over time, you should be able to see a *base volatility* with occasional spikes upward from that
+base volatility. However, I didn't see this with the synthetic data.
+
+# Potential future improvements
+
+- Better reconstruction of 2D synthetic stock data (N x 40) from 3D model output of synthetic
+  windows of data (N x 24 x 40)
 
 # References
 - [*What Is a Limit Order Book? Definition and Data* by Will Kenton (Investopedia article)](https://www.investopedia.com/terms/l/limitorderbook.asp)
