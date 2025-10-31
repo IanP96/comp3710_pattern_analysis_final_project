@@ -692,8 +692,8 @@ class TimeGAN:
         # train supervisor
         self.optimize_params_d()
 
-    def train_and_generate(self):
-        """Train the model and generate some synthetic data"""
+    def train_and_save(self):
+        """Train the model and save its parameters"""
 
         logger.info("Starting training ...")
 
